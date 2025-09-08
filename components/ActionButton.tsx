@@ -1,9 +1,8 @@
-import React, { useRef } from 'react';
+import React, { useState } from 'react';
 import {
   TouchableOpacity,
   Text,
   StyleSheet,
-  Animated,
   ViewStyle,
   View,
 } from 'react-native';
@@ -18,73 +17,35 @@ interface ActionButtonProps {
 }
 
 export default function ActionButton({ title, onPress, colors, icon, style }: ActionButtonProps) {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-  const borderAnim = useRef(new Animated.Value(1)).current;
-  const shadowAnim = useRef(new Animated.Value(1)).current;
+  const [isPressed, setIsPressed] = useState(false);
 
   const handlePressIn = () => {
-    Animated.parallel([
-      Animated.spring(scaleAnim, {
-        toValue: 0.96,
-        useNativeDriver: true,
-        tension: 150,
-        friction: 4,
-      }),
-      Animated.timing(borderAnim, {
-        toValue: 1.1,
-        duration: 150,
-        useNativeDriver: false,
-      }),
-      Animated.timing(shadowAnim, {
-        toValue: 1.5,
-        duration: 150,
-        useNativeDriver: false,
-      }),
-    ]).start();
+    setIsPressed(true);
   };
 
   const handlePressOut = () => {
-    Animated.parallel([
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        useNativeDriver: true,
-        tension: 150,
-        friction: 4,
-      }),
-      Animated.timing(borderAnim, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: false,
-      }),
-      Animated.timing(shadowAnim, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: false,
-      }),
-    ]).start();
+    setIsPressed(false);
   };
 
   return (
-    <Animated.View
-      style={[
-        style,
-        {
-          transform: [{ scale: scaleAnim }],
-          elevation: shadowAnim,
-        },
-      ]}
-    >
+    <View style={[style, isPressed && styles.pressedContainer]}>
       <TouchableOpacity
         onPress={onPress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
-        activeOpacity={0.9}
-        style={styles.buttonContainer}
+        activeOpacity={1}
+        style={[
+          styles.buttonContainer,
+          isPressed && styles.pressedButton
+        ]}
       >
         {/* Borde con gradiente */}
         <LinearGradient 
           colors={colors} 
-          style={styles.borderGradient}
+          style={[
+            styles.borderGradient,
+            isPressed && styles.pressedBorder
+          ]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
         >
@@ -97,7 +58,7 @@ export default function ActionButton({ title, onPress, colors, icon, style }: Ac
           </View>
         </LinearGradient>
       </TouchableOpacity>
-    </Animated.View>
+    </View>
   );
 }
 
@@ -107,12 +68,23 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
-    shadowRadius: 8,
+    shadowRadius: 6,
     elevation: 6,
   },
+  pressedContainer: {
+    transform: [{ scale: 0.96 }],
+  },
+  pressedButton: {
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+  },
   borderGradient: {
-    padding: 3, // Grosor del borde
+    padding: 3,
     borderRadius: 16,
+  },
+  pressedBorder: {
+    padding: 4,
   },
   contentContainer: {
     backgroundColor: '#FFFFFF',

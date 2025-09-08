@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -6,71 +6,126 @@ import {
   ScrollView,
   SafeAreaView,
   TouchableOpacity,
+  TextInput,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ArrowLeft, CreditCard, DollarSign, Clock, CircleCheck as CheckCircle, TriangleAlert as AlertTriangle, Calendar } from 'lucide-react-native';
+import { 
+  ArrowLeft, 
+  CreditCard, 
+  DollarSign, 
+  Clock, 
+  Search,
+  CircleCheck as CheckCircle, 
+  TriangleAlert as AlertTriangle, 
+  Calendar,
+  User,
+  Building,
+  Smartphone
+} from 'lucide-react-native';
 import { useRouter } from 'expo-router';
+
+interface DebtInfo {
+  clientName: string;
+  cedula: string;
+  totalDebt: number;
+  nextPayment: number;
+  dueDate: string;
+  installments: Array<{
+    number: number;
+    amount: number;
+    dueDate: string;
+    status: 'pending' | 'paid' | 'overdue';
+  }>;
+}
 
 export default function PaymentsScreen() {
   const router = useRouter();
+  const [cedula, setCedula] = useState('');
+  const [debtInfo, setDebtInfo] = useState<DebtInfo | null>(null);
+  const [showPaymentMethods, setShowPaymentMethods] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // Simulación de consulta a base de datos
+  const consultarDeuda = async () => {
+    if (!cedula || cedula.length < 10) {
+      Alert.alert('Error', 'Por favor ingresa un número de cédula válido');
+      return;
+    }
+
+    setLoading(true);
+    
+    // Simulación de delay de API
+    setTimeout(() => {
+      // Datos simulados - en producción esto vendría de tu API
+      const mockData: DebtInfo = {
+        clientName: 'Tarupi Zambrano Marlene',
+        cedula: '1803985504',
+        totalDebt: 255.00,
+        nextPayment: 85.00,
+        dueDate: '2025-04-11',
+        installments: [
+          { number: 1, amount: 85.00, dueDate: '2025-01-11', status: 'paid' },
+          { number: 2, amount: 85.00, dueDate: '2025-02-11', status: 'paid' },
+          { number: 3, amount: 85.00, dueDate: '2025-03-11', status: 'paid' },
+          { number: 4, amount: 85.00, dueDate: '2025-04-11', status: 'pending' },
+          { number: 5, amount: 85.00, dueDate: '2025-05-11', status: 'pending' },
+        ]
+      };
+      
+      setDebtInfo(mockData);
+      setLoading(false);
+    }, 1500);
+  };
 
   const paymentMethods = [
     {
-      method: 'Efectivo',
-      description: 'Pago en nuestras oficinas durante horarios de atención',
-      icon: '💵',
-      available: true,
-    },
-    {
+      id: 'transfer',
       method: 'Transferencia Bancaria',
       description: 'Banco Pichincha, Banco del Pacífico, Banco Guayaquil',
-      icon: '🏦',
+      icon: <Building size={24} color="#4682B4" />,
       available: true,
     },
     {
+      id: 'card',
       method: 'Tarjeta de Crédito/Débito',
       description: 'Visa, MasterCard, American Express',
-      icon: '💳',
+      icon: <CreditCard size={24} color="#4682B4" />,
       available: true,
     },
     {
-      method: 'Pago Móvil',
-      description: 'Disponible próximamente a través de la app',
-      icon: '📱',
-      available: false,
+      id: 'deuna',
+      method: 'Pago con DEUNA',
+      description: 'Plataforma de pagos segura y rápida',
+      icon: <Smartphone size={24} color="#4682B4" />,
+      available: true,
     },
   ];
 
-  const paymentPlans = [
-    {
-      title: 'Pago Único',
-      discount: '10% de descuento',
-      description: 'Pago completo al momento de la reserva',
-      benefits: ['Mayor descuento', 'Sin intereses', 'Proceso más rápido'],
-      color: '#87A96B',
-    },
-    {
-      title: 'Plan 3 Meses',
-      discount: '5% de descuento',
-      description: '30% inicial + 2 cuotas mensuales',
-      benefits: ['Descuento moderado', 'Flexibilidad de pago', 'Sin intereses'],
-      color: '#4682B4',
-    },
-    {
-      title: 'Plan 6 Meses',
-      discount: 'Sin descuento',
-      description: '30% inicial + 5 cuotas mensuales',
-      benefits: ['Mayor flexibilidad', 'Cuotas más bajas', 'Interés preferencial 2%'],
-      color: '#DAA520',
-    },
-    {
-      title: 'Plan 12 Meses',
-      discount: 'Interés 5%',
-      description: '30% inicial + 11 cuotas mensuales',
-      benefits: ['Máxima flexibilidad', 'Cuotas muy bajas', 'Plan extendido'],
-      color: '#CD853F',
-    },
-  ];
+  const handlePaymentSelect = (installmentNumber: number) => {
+    setSelectedPayment(installmentNumber);
+    setShowPaymentMethods(true);
+  };
+
+  const processPayment = (methodId: string) => {
+    Alert.alert(
+      'Procesar Pago',
+      `¿Confirmas el pago de $${debtInfo?.nextPayment} mediante ${paymentMethods.find(m => m.id === methodId)?.method}?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { 
+          text: 'Confirmar', 
+          onPress: () => {
+            // Aquí iría la lógica de procesamiento de pago
+            Alert.alert('Éxito', 'Pago procesado correctamente');
+            setShowPaymentMethods(false);
+            setSelectedPayment(null);
+          }
+        }
+      ]
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -88,121 +143,170 @@ export default function PaymentsScreen() {
         </View>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {/* Introduction */}
-          <View style={styles.section}>
-            <LinearGradient
-              colors={['#FFFFFF', '#F8F8FF']}
-              style={styles.introCard}
-            >
-              <View style={styles.introHeader}>
-                <CreditCard size={28} color="#4682B4" />
-                <Text style={styles.introTitle}>Sistema de Pagos</Text>
-              </View>
-              <Text style={styles.introText}>
-                Ofrecemos múltiples opciones de pago y planes flexibles para que 
-                puedas cumplir con tus compromisos de manera cómoda y segura. 
-                Nuestro sistema te permite realizar consultas, pagos y llevar 
-                un historial completo de tus transacciones.
-              </Text>
-            </LinearGradient>
-          </View>
-
-          {/* Payment Status Check */}
+          {/* Search Section */}
           <View style={styles.section}>
             <LinearGradient
               colors={['#87CEEB', '#F5F5DC']}
-              style={styles.checkCard}
+              style={styles.searchCard}
             >
-              <Text style={styles.checkTitle}>Consulta tu Estado de Pagos</Text>
-              <Text style={styles.checkDescription}>
-                Ingresa tu número de cédula para consultar el estado de tus pagos
+              <View style={styles.searchHeader}>
+                <User size={24} color="#4682B4" />
+                <Text style={styles.searchTitle}>Consulta tu Estado de Cuenta</Text>
+              </View>
+              
+              <Text style={styles.searchDescription}>
+                Ingresa tu número de cédula para consultar tus pagos pendientes
               </Text>
-              <TouchableOpacity style={styles.checkButton}>
-                <LinearGradient
-                  colors={['#4682B4', '#2F4F4F']}
-                  style={styles.checkButtonGradient}
+              
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={styles.cedulaInput}
+                  placeholder="Número de cédula (ej: 1234567890)"
+                  value={cedula}
+                  onChangeText={setCedula}
+                  keyboardType="numeric"
+                  maxLength={10}
+                />
+                <TouchableOpacity 
+                  style={styles.searchButton}
+                  onPress={consultarDeuda}
+                  disabled={loading}
                 >
-                  <Text style={styles.checkButtonText}>Consultar Estado</Text>
-                </LinearGradient>
-              </TouchableOpacity>
+                  <LinearGradient
+                    colors={['#4682B4', '#2F4F4F']}
+                    style={styles.searchButtonGradient}
+                  >
+                    <Search size={18} color="#FFFFFF" />
+                    <Text style={styles.searchButtonText}>
+                      {loading ? 'Consultando...' : 'Consultar'}
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
             </LinearGradient>
           </View>
 
-          {/* Payment Methods */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Métodos de Pago Disponibles</Text>
-            {paymentMethods.map((method, index) => (
-              <View key={index} style={styles.methodCard}>
-                <LinearGradient
-                  colors={method.available ? ['#FFFFFF', '#F0F8FF'] : ['#F5F5F5', '#E5E5E5']}
-                  style={styles.methodGradient}
-                >
-                  <View style={styles.methodHeader}>
-                    <Text style={styles.methodIcon}>{method.icon}</Text>
-                    <View style={styles.methodInfo}>
-                      <Text style={[
-                        styles.methodTitle,
-                        !method.available && styles.methodTitleDisabled
-                      ]}>
-                        {method.method}
-                      </Text>
-                      <Text style={[
-                        styles.methodDescription,
-                        !method.available && styles.methodDescriptionDisabled
-                      ]}>
-                        {method.description}
-                      </Text>
-                    </View>
-                    <View style={[
-                      styles.statusBadge,
-                      method.available ? styles.statusAvailable : styles.statusUnavailable
-                    ]}>
-                      <Text style={[
-                        styles.statusText,
-                        method.available ? styles.statusTextAvailable : styles.statusTextUnavailable
-                      ]}>
-                        {method.available ? 'Disponible' : 'Próximamente'}
-                      </Text>
-                    </View>
-                  </View>
-                </LinearGradient>
-              </View>
-            ))}
-          </View>
+          {/* Debt Information */}
+          {debtInfo && (
+            <View style={styles.section}>
+              <LinearGradient
+                colors={['#FFFFFF', '#F8F8FF']}
+                style={styles.debtCard}
+              >
+                <View style={styles.clientInfo}>
+                  <Text style={styles.clientName}>Hola, {debtInfo.clientName}</Text>
+                  <Text style={styles.clientRole}>Cliente</Text>
+                </View>
 
-          {/* Payment Plans */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Planes de Pago</Text>
-            {paymentPlans.map((plan, index) => (
-              <View key={index} style={styles.planCard}>
-                <LinearGradient
-                  colors={['#FFFFFF', '#F8F8FF']}
-                  style={styles.planGradient}
-                >
-                  <View style={styles.planHeader}>
-                    <View style={styles.planTitleContainer}>
-                      <Text style={styles.planTitle}>{plan.title}</Text>
-                      <Text style={[styles.planDiscount, { color: plan.color }]}>
-                        {plan.discount}
-                      </Text>
-                    </View>
+                {/* Payment Summary */}
+                <View style={styles.paymentSummary}>
+                  <View style={styles.summaryItem}>
+                    <Text style={styles.summaryLabel}>Último pago</Text>
+                    <Text style={styles.summaryAmount}>$85.00</Text>
                   </View>
-                  
-                  <Text style={styles.planDescription}>{plan.description}</Text>
-                  
-                  <View style={styles.benefitsContainer}>
-                    <Text style={styles.benefitsTitle}>Beneficios:</Text>
-                    {plan.benefits.map((benefit, idx) => (
-                      <View key={idx} style={styles.benefitItem}>
-                        <CheckCircle size={16} color={plan.color} />
-                        <Text style={styles.benefitText}>{benefit}</Text>
+                  <View style={styles.summaryItem}>
+                    <Text style={styles.summaryLabel}>Próximo pago</Text>
+                    <Text style={[styles.summaryAmount, styles.nextPayment]}>
+                      ${debtInfo.nextPayment.toFixed(2)}
+                    </Text>
+                  </View>
+                  <View style={styles.summaryItem}>
+                    <Text style={styles.summaryLabel}>Saldo</Text>
+                    <Text style={styles.summaryAmount}>$0.00</Text>
+                  </View>
+                </View>
+
+                {/* Payment Details */}
+                <View style={styles.paymentDetails}>
+                  <TouchableOpacity style={styles.detailsHeader}>
+                    <Text style={styles.detailsTitle}>Detalle de facturación</Text>
+                  </TouchableOpacity>
+
+                  <View style={styles.detailsContent}>
+                    <View style={styles.tableHeader}>
+                      <Text style={styles.tableHeaderText}>Facturas</Text>
+                      <Text style={styles.tableHeaderText}>Total</Text>
+                      <Text style={styles.tableHeaderText}>Por cobrar</Text>
+                    </View>
+
+                    {debtInfo.installments.map((installment, index) => (
+                      <View key={index} style={styles.installmentRow}>
+                        <View style={styles.installmentInfo}>
+                          <Text style={styles.installmentTitle}>
+                            Cuota {installment.number} - {installment.dueDate}
+                          </Text>
+                          <Text style={styles.installmentDate}>
+                            📅 {installment.dueDate}
+                          </Text>
+                        </View>
+                        <Text style={styles.installmentAmount}>
+                          ${installment.amount.toFixed(2)}
+                        </Text>
+                        <View style={styles.paymentActions}>
+                          {installment.status === 'paid' ? (
+                            <Text style={styles.paidStatus}>Pagado</Text>
+                          ) : (
+                            <TouchableOpacity
+                              style={styles.payButton}
+                              onPress={() => handlePaymentSelect(installment.number)}
+                            >
+                              <Text style={styles.payButtonText}>Pagar</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
                       </View>
                     ))}
                   </View>
-                </LinearGradient>
-              </View>
-            ))}
-          </View>
+                </View>
+              </LinearGradient>
+            </View>
+          )}
+
+          {/* Payment Methods Modal */}
+          {showPaymentMethods && (
+            <View style={styles.section}>
+              <LinearGradient
+                colors={['#FFFFFF', '#F0F8FF']}
+                style={styles.paymentMethodsCard}
+              >
+                <Text style={styles.sectionTitle}>Métodos de Pago Disponibles</Text>
+                <Text style={styles.paymentMethodsSubtitle}>
+                  Selecciona tu método de pago preferido para la cuota {selectedPayment}
+                </Text>
+                
+                {paymentMethods.map((method, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.methodCard}
+                    onPress={() => processPayment(method.id)}
+                  >
+                    <LinearGradient
+                      colors={['#FFFFFF', '#F8F8FF']}
+                      style={styles.methodGradient}
+                    >
+                      <View style={styles.methodHeader}>
+                        {method.icon}
+                        <View style={styles.methodInfo}>
+                          <Text style={styles.methodTitle}>{method.method}</Text>
+                          <Text style={styles.methodDescription}>{method.description}</Text>
+                        </View>
+                        <View style={styles.statusAvailable}>
+                          <Text style={styles.statusTextAvailable}>Disponible</Text>
+                        </View>
+                      </View>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                ))}
+
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={() => setShowPaymentMethods(false)}
+                >
+                  <Text style={styles.cancelButtonText}>Cancelar</Text>
+                </TouchableOpacity>
+              </LinearGradient>
+            </View>
+          )}
 
           {/* Important Information */}
           <View style={styles.section}>
@@ -222,80 +326,19 @@ export default function PaymentsScreen() {
                     Los pagos vencidos generan un recargo del 2% mensual
                   </Text>
                 </View>
-                
                 <View style={styles.infoItem}>
                   <Text style={styles.infoBullet}>•</Text>
                   <Text style={styles.infoText}>
-                    El pago inicial del 30% debe realizarse dentro de 5 días hábiles
+                    Conserva el comprobante de pago hasta completar todas las cuotas
                   </Text>
                 </View>
-                
                 <View style={styles.infoItem}>
                   <Text style={styles.infoBullet}>•</Text>
                   <Text style={styles.infoText}>
-                    Todos los pagos incluyen mantenimiento por 2 años
-                  </Text>
-                </View>
-                
-                <View style={styles.infoItem}>
-                  <Text style={styles.infoBullet}>•</Text>
-                  <Text style={styles.infoText}>
-                    Los comprobantes deben conservarse hasta completar el pago total
+                    El procesamiento del pago puede tomar hasta 24 horas hábiles
                   </Text>
                 </View>
               </View>
-            </LinearGradient>
-          </View>
-
-          {/* Payment History */}
-          <View style={styles.section}>
-            <LinearGradient
-              colors={['#F0F8FF', '#FFFFFF']}
-              style={styles.historyCard}
-            >
-              <View style={styles.historyHeader}>
-                <Calendar size={24} color="#4682B4" />
-                <Text style={styles.historyTitle}>Historial de Pagos</Text>
-              </View>
-              <Text style={styles.historyDescription}>
-                Consulta tu historial completo de pagos realizados, fechas de vencimiento 
-                y estado actual de tu cuenta.
-              </Text>
-              <TouchableOpacity style={styles.historyButton}>
-                <LinearGradient
-                  colors={['#4682B4', '#2F4F4F']}
-                  style={styles.historyButtonGradient}
-                >
-                  <Clock size={18} color="#FFFFFF" />
-                  <Text style={styles.historyButtonText}>Ver Historial</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </LinearGradient>
-          </View>
-
-          {/* Contact CTA */}
-          <View style={styles.section}>
-            <LinearGradient
-              colors={['#87A96B', '#5F7F3F']}
-              style={styles.ctaCard}
-            >
-              <Text style={styles.ctaTitle}>¿Tienes dudas sobre pagos?</Text>
-              <Text style={styles.ctaText}>
-                Nuestro equipo financiero está disponible para ayudarte con 
-                consultas sobre métodos de pago, planes disponibles y resolución 
-                de cualquier inconveniente.
-              </Text>
-              <TouchableOpacity
-                style={styles.ctaButton}
-                onPress={() => router.push('/contact')}
-              >
-                <LinearGradient
-                  colors={['#FFFFFF', '#F8F8FF']}
-                  style={styles.ctaButtonGradient}
-                >
-                  <Text style={styles.ctaButtonText}>Contactar Soporte</Text>
-                </LinearGradient>
-              </TouchableOpacity>
             </LinearGradient>
           </View>
 
@@ -348,7 +391,9 @@ const styles = StyleSheet.create({
     color: '#4682B4',
     marginBottom: 15,
   },
-  introCard: {
+  
+  // Search Section
+  searchCard: {
     padding: 20,
     borderRadius: 15,
     elevation: 3,
@@ -358,25 +403,56 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     marginTop: 10,
   },
-  introHeader: {
+  searchHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 15,
     gap: 12,
   },
-  introTitle: {
+  searchTitle: {
     fontSize: 18,
     fontFamily: 'Inter-Bold',
     color: '#4682B4',
   },
-  introText: {
+  searchDescription: {
     fontSize: 14,
     fontFamily: 'Inter-Regular',
-    color: '#666',
-    lineHeight: 22,
-    textAlign: 'justify',
+    color: '#4682B4',
+    marginBottom: 20,
   },
-  checkCard: {
+  inputContainer: {
+    gap: 15,
+  },
+  cedulaInput: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    fontFamily: 'Inter-Regular',
+  },
+  searchButton: {
+    borderRadius: 10,
+  },
+  searchButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 25,
+    borderRadius: 10,
+    gap: 8,
+  },
+  searchButtonText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+    color: '#FFFFFF',
+  },
+  
+  // Debt Information
+  debtCard: {
     padding: 20,
     borderRadius: 15,
     elevation: 3,
@@ -384,34 +460,135 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 6,
-    alignItems: 'center',
   },
-  checkTitle: {
+  clientInfo: {
+    marginBottom: 20,
+  },
+  clientName: {
     fontSize: 18,
     fontFamily: 'Inter-Bold',
     color: '#4682B4',
-    marginBottom: 10,
-    textAlign: 'center',
   },
-  checkDescription: {
+  clientRole: {
     fontSize: 14,
     fontFamily: 'Inter-Regular',
-    color: '#4682B4',
-    textAlign: 'center',
+    color: '#666',
+  },
+  paymentSummary: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     marginBottom: 20,
   },
-  checkButton: {
-    borderRadius: 10,
+  summaryItem: {
+    alignItems: 'center',
+    flex: 1,
   },
-  checkButtonGradient: {
-    paddingVertical: 12,
-    paddingHorizontal: 25,
-    borderRadius: 10,
+  summaryLabel: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    color: '#666',
+    marginBottom: 5,
   },
-  checkButtonText: {
+  summaryAmount: {
     fontSize: 16,
     fontFamily: 'Inter-Bold',
+    color: '#4682B4',
+  },
+  nextPayment: {
+    color: '#87A96B',
+  },
+  paymentDetails: {
+    marginTop: 20,
+  },
+  detailsHeader: {
+    marginBottom: 15,
+  },
+  detailsTitle: {
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+    color: '#4682B4',
+  },
+  detailsContent: {
+    gap: 10,
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  tableHeaderText: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: '#4682B4',
+    textAlign: 'center',
+  },
+  installmentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  installmentInfo: {
+    flex: 1,
+  },
+  installmentTitle: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: '#333',
+  },
+  installmentDate: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    color: '#666',
+    marginTop: 2,
+  },
+  installmentAmount: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: '#4682B4',
+    textAlign: 'center',
+  },
+  paymentActions: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  payButton: {
+    backgroundColor: '#87A96B',
+    paddingHorizontal: 15,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  payButtonText: {
+    fontSize: 12,
+    fontFamily: 'Inter-Bold',
     color: '#FFFFFF',
+  },
+  paidStatus: {
+    fontSize: 12,
+    fontFamily: 'Inter-Regular',
+    color: '#87A96B',
+  },
+  
+  // Payment Methods
+  paymentMethodsCard: {
+    padding: 20,
+    borderRadius: 15,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+  },
+  paymentMethodsSubtitle: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#666',
+    marginBottom: 20,
+    textAlign: 'center',
   },
   methodCard: {
     marginBottom: 12,
@@ -431,9 +608,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  methodIcon: {
-    fontSize: 24,
-  },
   methodInfo: {
     flex: 1,
   },
@@ -443,95 +617,35 @@ const styles = StyleSheet.create({
     color: '#4682B4',
     marginBottom: 4,
   },
-  methodTitleDisabled: {
-    color: '#999',
-  },
   methodDescription: {
     fontSize: 12,
     fontFamily: 'Inter-Regular',
     color: '#666',
     lineHeight: 16,
   },
-  methodDescriptionDisabled: {
-    color: '#999',
-  },
-  statusBadge: {
+  statusAvailable: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
-  },
-  statusAvailable: {
     backgroundColor: '#87A96B',
   },
-  statusUnavailable: {
-    backgroundColor: '#CCC',
-  },
-  statusText: {
+  statusTextAvailable: {
     fontSize: 11,
     fontFamily: 'Inter-SemiBold',
-  },
-  statusTextAvailable: {
     color: '#FFFFFF',
   },
-  statusTextUnavailable: {
-    color: '#666',
-  },
-  planCard: {
-    marginBottom: 15,
-    borderRadius: 12,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  planGradient: {
-    padding: 18,
-    borderRadius: 12,
-  },
-  planHeader: {
-    marginBottom: 12,
-  },
-  planTitleContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  cancelButton: {
+    marginTop: 15,
+    padding: 12,
     alignItems: 'center',
   },
-  planTitle: {
+  cancelButtonText: {
     fontSize: 16,
-    fontFamily: 'Inter-Bold',
-    color: '#4682B4',
-  },
-  planDiscount: {
-    fontSize: 14,
-    fontFamily: 'Inter-Bold',
-  },
-  planDescription: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#666',
-    marginBottom: 15,
-  },
-  benefitsContainer: {
-    gap: 8,
-  },
-  benefitsTitle: {
-    fontSize: 14,
     fontFamily: 'Inter-SemiBold',
-    color: '#4682B4',
-    marginBottom: 5,
-  },
-  benefitItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  benefitText: {
-    fontSize: 13,
-    fontFamily: 'Inter-Regular',
     color: '#666',
-    flex: 1,
   },
+  
+  // Info Section
   infoCard: {
     padding: 20,
     borderRadius: 15,
@@ -571,88 +685,6 @@ const styles = StyleSheet.create({
     color: '#666',
     flex: 1,
     lineHeight: 18,
-  },
-  historyCard: {
-    padding: 20,
-    borderRadius: 15,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-  },
-  historyHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    gap: 10,
-  },
-  historyTitle: {
-    fontSize: 16,
-    fontFamily: 'Inter-Bold',
-    color: '#4682B4',
-  },
-  historyDescription: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#666',
-    lineHeight: 20,
-    marginBottom: 15,
-  },
-  historyButton: {
-    borderRadius: 10,
-    alignSelf: 'flex-start',
-  },
-  historyButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    borderRadius: 10,
-    gap: 6,
-  },
-  historyButtonText: {
-    fontSize: 14,
-    fontFamily: 'Inter-SemiBold',
-    color: '#FFFFFF',
-  },
-  ctaCard: {
-    padding: 20,
-    borderRadius: 15,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    alignItems: 'center',
-  },
-  ctaTitle: {
-    fontSize: 18,
-    fontFamily: 'Inter-Bold',
-    color: '#FFFFFF',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  ctaText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#FFFFFF',
-    lineHeight: 20,
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  ctaButton: {
-    borderRadius: 10,
-  },
-  ctaButtonGradient: {
-    paddingVertical: 12,
-    paddingHorizontal: 25,
-    borderRadius: 10,
-  },
-  ctaButtonText: {
-    fontSize: 16,
-    fontFamily: 'Inter-Bold',
-    color: '#87A96B',
   },
   bottomPadding: {
     height: 50,

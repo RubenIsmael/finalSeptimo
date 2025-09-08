@@ -11,8 +11,8 @@ import {
 const { width: screenWidth } = Dimensions.get('window');
 
 // Dimensiones del carousel
-const CAROUSEL_WIDTH = screenWidth * 0.9; // 90% del ancho de pantalla
-const CAROUSEL_HEIGHT = 200; // Altura ligeramente aumentada para mejor proporción
+const CAROUSEL_WIDTH = screenWidth * 0.9;
+const CAROUSEL_HEIGHT = 200;
 
 const carouselImages = [
   'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRdq5yrgjen9UNizUysBN7orwfi4glNEouo6Q&s',
@@ -25,37 +25,84 @@ export default function ImageCarousel() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const scrollViewRef = useRef<ScrollView>(null);
   const fadeAnim = useRef(new Animated.Value(1)).current;
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      Animated.sequence([
-        Animated.timing(fadeAnim, {
-          toValue: 0.7,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start();
+  // Función para ir al siguiente slide
+  const goToNextSlide = () => {
+    const nextIndex = (currentIndex + 1) % carouselImages.length;
+    setCurrentIndex(nextIndex);
+    
+    // Animación de fade suave
+    Animated.sequence([
+      Animated.timing(fadeAnim, {
+        toValue: 0.8,
+        duration: 200,
+        useNativeDriver: true, // ✅ CORRECTO: useNativeDriver: true para opacity
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true, // ✅ CORRECTO: useNativeDriver: true para opacity
+      }),
+    ]).start();
 
-      const nextIndex = (currentIndex + 1) % carouselImages.length;
-      setCurrentIndex(nextIndex);
-      scrollViewRef.current?.scrollTo({
-        x: nextIndex * CAROUSEL_WIDTH, 
+    // Scroll al siguiente slide
+    if (scrollViewRef.current) {
+      scrollViewRef.current.scrollTo({
+        x: nextIndex * CAROUSEL_WIDTH,
         animated: true,
       });
-    }, 4000);
+    }
+  };
 
-    return () => clearInterval(interval);
-  }, [currentIndex, fadeAnim]);
+  // Effect para el auto-scroll
+  useEffect(() => {
+    // Limpiar interval anterior si existe
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+
+    // Crear nuevo interval
+    intervalRef.current = setInterval(goToNextSlide, 4000);
+
+    // Cleanup al desmontar o cambiar dependencias
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [currentIndex]); // Dependencia en currentIndex para reiniciar el timer
+
+  // Cleanup adicional al desmontar el componente
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, []);
 
   const handleScroll = (event: any) => {
     const slideSize = event.nativeEvent.layoutMeasurement.width;
-    const index = Math.floor(event.nativeEvent.contentOffset.x / slideSize);
-    setCurrentIndex(index);
+    const offset = event.nativeEvent.contentOffset.x;
+    const index = Math.round(offset / slideSize);
+    
+    // Solo actualizar si el índice es diferente para evitar loops
+    if (index !== currentIndex && index >= 0 && index < carouselImages.length) {
+      setCurrentIndex(index);
+    }
+  };
+
+  const handleScrollBeginDrag = () => {
+    // Pausar auto-scroll cuando el usuario toca
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+  };
+
+  const handleScrollEndDrag = () => {
+    // Reanudar auto-scroll después de que el usuario termine de tocar
+    intervalRef.current = setInterval(goToNextSlide, 4000);
   };
 
   return (
@@ -67,8 +114,11 @@ export default function ImageCarousel() {
           pagingEnabled
           showsHorizontalScrollIndicator={false}
           onScroll={handleScroll}
+          onScrollBeginDrag={handleScrollBeginDrag}
+          onScrollEndDrag={handleScrollEndDrag}
           scrollEventThrottle={16}
           style={styles.scrollView}
+          decelerationRate="fast"
         >
           {carouselImages.map((image, index) => (
             <View key={index} style={styles.imageContainer}>
@@ -76,6 +126,7 @@ export default function ImageCarousel() {
                 <Image 
                   source={{ uri: image }} 
                   style={styles.image}
+                  resizeMode="cover"
                   onError={(error) => {
                     console.log('Error cargando imagen:', error);
                   }}
@@ -129,23 +180,22 @@ const styles = StyleSheet.create({
     width: CAROUSEL_WIDTH,
     height: CAROUSEL_HEIGHT,
     position: 'relative',
-    backgroundColor: '#f8f9fa', // Fondo de respaldo
+    backgroundColor: '#f8f9fa',
   },
   imageWrapper: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 2, // Pequeño padding para evitar que la imagen toque los bordes
+    padding: 2,
   },
   image: {
-    width: CAROUSEL_WIDTH - 4, // Ligeramente menor para el padding
+    width: CAROUSEL_WIDTH - 4,
     height: CAROUSEL_HEIGHT - 4,
-    resizeMode: 'cover', // Volvemos a cover pero con mejor estructura
     borderRadius: 14,
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(46, 125, 50, 0.10)', // Overlay más sutil
+    backgroundColor: 'rgba(46, 125, 50, 0.10)',
     borderRadius: 16,
   },
   pagination: {

@@ -23,7 +23,7 @@ function CustomDrawerContent(props: any) {
         style={styles.header}
       >
         <Image
-          source={{ uri: 'https://images.pexels.com/photos/2893685/pexels-photo-2893685.jpeg?auto=compress&cs=tinysrgb&w=200' }}
+          source={{ uri: 'https://scontent.fuio35-1.fna.fbcdn.net/v/t39.30808-1/435977636_122097696560271946_1795400588662181208_n.jpg?stp=dst-jpg_s200x200_tt6&_nc_cat=100&ccb=1-7&_nc_sid=2d3e12&_nc_ohc=K1ppGMkRUJgQ7kNvwHlRh4w&_nc_oc=AdlEx8Y_sN_RMPntZSqtNW4PJwAXbew7QxZh-o9fEJu7OD7Rx-ZtHtXAAxNJd4z8Qrs&_nc_zt=24&_nc_ht=scontent.fuio35-1.fna&_nc_gid=N77w_wHPYW0MKbbss37vMg&oh=00_AfYmV6v5pAO0-NbmaMTgw7pXbYpE-27XIy4CCVjUbHmWEA&oe=68C13085' }}
           style={styles.logo}
         />
         <Text style={styles.headerTitle}>Cementerio</Text>
