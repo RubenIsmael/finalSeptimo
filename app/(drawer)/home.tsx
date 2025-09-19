@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -15,9 +15,11 @@ import { Menu, Calendar, CreditCard, Search, Clock, MapPin, Phone } from 'lucide
 import { useRouter } from 'expo-router';
 import { DrawerActions } from '@react-navigation/native';
 import { useNavigation } from '@react-navigation/native';
+import { useFonts } from 'expo-font';
+import * as SplashScreen from 'expo-splash-screen';
 import ImageCarousel from '@/components/ImageCarousel';
 import FloatingChatBot from '@/components/FloatingChatBot';
-import ActionButton from '@/components/ActionButton'; // Importamos el componente
+import ActionButton from '@/components/ActionButton';
 
 // Solo importar WebView en móvil
 let WebView: any = null;
@@ -30,9 +32,37 @@ if (Platform.OS !== 'web') {
   }
 }
 
+// Mantener la pantalla de splash mientras cargan las fuentes
+SplashScreen.preventAutoHideAsync();
+
 export default function HomeScreen() {
   const router = useRouter();
   const navigation = useNavigation();
+
+  // Cargar las fuentes personalizadas
+  const [fontsLoaded] = useFonts({
+    'TituloPrincipal': require('../assets/fonts/Titulo_Principal.ttf'),
+    'TextoGeneral': require('../assets/fonts/Texto_General.ttf'),
+    'Titulos': require('../assets/fonts/Titulos.ttf'),
+  });
+
+  // Estado para controlar cuando las fuentes están listas
+  const [appIsReady, setAppIsReady] = useState(false);
+
+  useEffect(() => {
+    async function prepare() {
+      try {
+        // Esperar a que las fuentes se carguen
+        if (fontsLoaded) {
+          setAppIsReady(true);
+          await SplashScreen.hideAsync();
+        }
+      } catch (e) {
+        console.warn(e);
+      }
+    }
+    prepare();
+  }, [fontsLoaded]);
 
   const openDrawer = () => {
     navigation.dispatch(DrawerActions.openDrawer());
@@ -79,6 +109,32 @@ export default function HomeScreen() {
     }
   };
 
+  // Función para abrir WhatsApp
+  const abrirWhatsApp = () => {
+    const phoneNumber = '593996344075'; // Sin el +
+    const message = 'Hola, me interesa obtener información sobre los servicios del Cementerio San Agustín';
+    
+    const whatsappUrl = Platform.select({
+      ios: `whatsapp://send?phone=${phoneNumber}&text=${encodeURIComponent(message)}`,
+      android: `whatsapp://send?phone=${phoneNumber}&text=${encodeURIComponent(message)}`,
+      web: `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`
+    });
+    
+    if (Platform.OS === 'web') {
+      window.open(whatsappUrl, '_blank');
+    } else {
+      Linking.canOpenURL(whatsappUrl!).then(supported => {
+        if (supported) {
+          Linking.openURL(whatsappUrl!);
+        } else {
+          // Fallback para web WhatsApp
+          const webWhatsapp = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
+          Linking.openURL(webWhatsapp);
+        }
+      });
+    }
+  };
+
   // Configuración de botones de acción con ActionButton
   const actionButtons = [
     {
@@ -102,10 +158,10 @@ export default function HomeScreen() {
   ];
 
   const scheduleInfo = [
-    { day: 'Lunes - Viernes', hours: '8:00 AM - 5:00 PM' },
-    { day: 'Sábados', hours: '8:00 AM - 2:00 PM' },
-    { day: 'Domingos', hours: '9:00 AM - 1:00 PM' },
-    { day: 'Feriados', hours: 'Cerrado' },
+    { day: 'Lunes - Viernes', hours: '8:00 AM - 6:00 PM' },
+    { day: 'Sábados', hours: '8:00 AM - 5:00 PM' },
+    { day: 'Domingos', hours: '9:00 AM - 5:00 PM' },
+    { day: 'Feriados', hours: '10:00 AM - 5:00 PM' },
   ];
 
   // HTML para WebView (funciona en web y móvil)
@@ -190,6 +246,11 @@ export default function HomeScreen() {
     );
   };
 
+  // Mostrar loading mientras se cargan las fuentes
+  if (!appIsReady) {
+    return null; // O un componente de loading personalizado
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <LinearGradient
@@ -221,10 +282,11 @@ export default function HomeScreen() {
             >
               <Text style={styles.sectionTitle}>Nuestro Cementerio</Text>
               <Text style={styles.description}>
-                El Cementerio Parroquial San Agustín, ubicado en La Concordia, Santo Domingo, 
-                ha servido a nuestra comunidad por más de 12 años. Ofrecemos servicios de 
-                entierro y cuidado de tumbas con respeto, dignidad y profesionalismo, 
-                brindando un lugar de paz y tranquilidad para el descanso eterno de sus seres queridos.
+                Como institución parroquial católica, hemos mantenido viva la tradición 
+                cristiana de dar sepultura digna a nuestros hermanos, adaptándonos a los 
+                tiempos modernos sin perder nuestra esencia espiritual y comunitaria. 
+                Nuestro compromiso es preservar la memoria de quienes descansan aquí y 
+                brindar consuelo a sus familias con servicios que honren su legado.
               </Text>
             </LinearGradient>
           </View>
@@ -297,10 +359,20 @@ export default function HomeScreen() {
                 <Text style={styles.tapHint}>📍 Toca para navegar</Text>
               </TouchableOpacity>
               
-              <View style={styles.contactItem}>
-                <Phone size={20} color="#4682B4" />
-                <Text style={styles.contactText}>+593 2 XXX-XXXX</Text>
-              </View>
+              {/* Botón de WhatsApp mejorado */}
+              <TouchableOpacity 
+                style={styles.whatsappButton}
+                onPress={abrirWhatsApp}
+                activeOpacity={0.8}
+              >
+                <View style={styles.whatsappIconContainer}>
+                  <Text style={styles.whatsappIcon}>💬</Text>
+                </View>
+                <View style={styles.whatsappTextContainer}>
+                  <Text style={styles.whatsappNumber}>+593 996344075</Text>
+                  <Text style={styles.whatsappHint}>Toca para escribir por WhatsApp</Text>
+                </View>
+              </TouchableOpacity>
             </LinearGradient>
           </View>
 
@@ -337,13 +409,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerTitle: {
-    fontSize: 20,
-    fontFamily: 'Inter-Bold',
+    fontSize: 24,
+    fontFamily: 'TituloPrincipal',
     color: '#4682B4',
+    fontWeight: 'bold',
   },
   headerSubtitle: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
+    fontSize: 16,
+    fontFamily: 'TextoGeneral',
     color: '#666',
   },
   content: {
@@ -363,16 +436,17 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontFamily: 'Inter-Bold',
+    fontSize: 22,
+    fontFamily: 'Texto_General',
     color: '#4682B4',
     marginBottom: 10,
+    fontWeight: 'bold',
   },
   description: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
+    fontSize: 16,
+    fontFamily: 'TextoGeneral',
     color: '#666',
-    lineHeight: 22,
+    lineHeight: 24,
     textAlign: 'justify',
   },
   
@@ -410,13 +484,14 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F0F0F0',
   },
   scheduleDay: {
-    fontSize: 14,
-    fontFamily: 'Inter-SemiBold',
+    fontSize: 16,
+    fontFamily: 'TextoGeneral',
     color: '#333',
+    fontWeight: '600',
   },
   scheduleHours: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
+    fontSize: 15,
+    fontFamily: 'Titulos',
     color: '#666',
   },
   contactCard: {
@@ -429,11 +504,12 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
   },
   contactTitle: {
-    fontSize: 18,
-    fontFamily: 'Inter-Bold',
-    color: '#4682B4',
+    fontSize: 28,
+    fontFamily: 'Titulos',
+    color: '#000000',
     marginBottom: 15,
     textAlign: 'center',
+    fontWeight: 'bold',
   },
   contactItem: {
     flexDirection: 'row',
@@ -442,13 +518,14 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   contactText: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
+    fontSize: 16,
+    fontFamily: 'TextoGeneral',
     color: '#4682B4',
     flex: 1,
   },
   tapHint: {
-    fontSize: 11,
+    fontSize: 12,
+    fontFamily: 'TextoGeneral',
     color: '#4682B4',
     fontStyle: 'italic',
   },
@@ -476,17 +553,18 @@ const styles = StyleSheet.create({
   },
   mapFallbackText: {
     marginTop: 10,
-    fontSize: 16,
+    fontSize: 18,
     color: '#4682B4',
     textAlign: 'center',
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: 'Titulos',
+    fontWeight: '600',
   },
   mapFallbackSubtext: {
     marginTop: 5,
-    fontSize: 12,
+    fontSize: 14,
     color: '#666',
     textAlign: 'center',
-    fontFamily: 'Inter-Regular',
+    fontFamily: 'TextoGeneral',
   },
   openMapButton: {
     position: 'absolute',
@@ -499,7 +577,54 @@ const styles = StyleSheet.create({
   },
   openMapText: {
     color: '#FFFFFF',
-    fontSize: 12,
-    fontFamily: 'Inter-SemiBold',
+    fontSize: 13,
+    fontFamily: 'TextoGeneral',
+    fontWeight: '600',
+  },
+  
+  // ===== ESTILOS PARA WHATSAPP =====
+  whatsappButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    borderRadius: 15,
+    marginBottom: 10,
+    borderWidth: 2,
+    borderColor: '#25D366',
+    elevation: 2,
+    shadowColor: '#25D366',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+  },
+  whatsappIconContainer: {
+    width: 35,
+    height: 35,
+    borderRadius: 17,
+    backgroundColor: '#25D366',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  whatsappIcon: {
+    fontSize: 18,
+  },
+  whatsappTextContainer: {
+    flex: 1,
+  },
+  whatsappNumber: {
+    fontSize: 16,
+    fontFamily: 'TextoGeneral',
+    color: '#25D366',
+    fontWeight: '600',
+  },
+  whatsappHint: {
+    fontSize: 11,
+    fontFamily: 'TextoGeneral',
+    color: '#25D366',
+    fontStyle: 'italic',
+    marginTop: 2,
   },
 });

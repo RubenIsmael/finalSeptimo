@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MessageCircle, Send, X } from 'lucide-react-native';
-import { OpenAIService } from '@/services/openai';
 import { DatabaseService } from '@/services/database';
 
 interface ChatMessage {
@@ -21,6 +20,7 @@ interface ChatMessage {
   text: string;
   isUser: boolean;
   timestamp: Date;
+  waitingFor?: 'cedula' | 'nombre' | 'datos_reserva';
 }
 
 export default function FloatingChatBot() {
@@ -28,14 +28,398 @@ export default function FloatingChatBot() {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
-      text: 'Hola, soy el asistente virtual del Cementerio San Agustín. ¿En qué puedo ayudarte hoy?',
+      text: '¡Bienvenido al Cementerio San Agustín! 👋\n\nSoy tu asistente virtual. Puedo ayudarte con:\n\n📋 Consultas de deudas y pagos\n🔍 Ubicación de familiares\n💵 Precios por sector\n🏛️ Bóvedas disponibles\n📝 Información para reservas\n\n¿En qué puedo ayudarte hoy?',
       isUser: false,
       timestamp: new Date(),
     },
   ]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [conversationContext, setConversationContext] = useState<{
+    waitingFor?: 'cedula' | 'nombre' | 'datos_reserva' | 'confirmar_reserva';
+    intentType?: string;
+    tempData?: any;
+  }>({});
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  // Auto-scroll
+  useEffect(() => {
+    if (scrollViewRef.current) {
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
+  }, [messages]);
+
+  // Detectar intención del usuario
+  const detectIntent = (message: string) => {
+    const lower = message.toLowerCase();
+    
+    // Detectar cédula
+    const cedula = message.match(/\b\d{10}\b/)?.[0];
+    
+    return {
+      cedula,
+      quiereSaldos: lower.includes('sald') || lower.includes('deud') || 
+                   lower.includes('pag') || lower.includes('deb') ||
+                   lower.includes('pendiente'),
+      quiereBuscarFamiliar: lower.includes('familiar') || lower.includes('donde') || 
+                          lower.includes('ubicac') || lower.includes('buscar') ||
+                          lower.includes('sector') || lower.includes('está'),
+      quiereBovedas: lower.includes('bóveda') || lower.includes('boveda') || 
+                    lower.includes('disponib') || lower.includes('cuant'),
+      quierePrecios: lower.includes('precio') || lower.includes('cost') || 
+                    lower.includes('valor') || lower.includes('cuanto cuesta'),
+      quiereReservar: lower.includes('reserv') || lower.includes('apartar') ||
+                     lower.includes('contrat') || lower.includes('adquirir'),
+      saludo: lower.includes('hola') || lower.includes('buen') || 
+             lower.includes('ayuda') || lower === 'hi',
+      confirmacion: lower === 'si' || lower === 'sí' || lower === 'ok' || 
+                   lower === 'dale' || lower === 'confirmo',
+      negacion: lower === 'no' || lower.includes('cancel') || lower.includes('mejor no')
+    };
+  };
+
+  // Procesar respuesta basada en contexto
+  const processContextualResponse = async (message: string) => {
+    const dbService = DatabaseService.getInstance();
+    const intent = detectIntent(message);
+    
+    // Si estamos esperando algo específico
+    if (conversationContext.waitingFor === 'cedula') {
+      if (intent.cedula) {
+        // Tenemos la cédula, procesar según el tipo de consulta original
+        if (conversationContext.intentType === 'saldos') {
+          const deudaInfo = await dbService.consultarDeudasPorCedula(intent.cedula);
+          
+          if (deudaInfo.includes('no se encontró')) {
+            setConversationContext({});
+            return `No encontré registros para la cédula ${intent.cedula}.\n\n¿Deseas intentar con otra cédula o necesitas ayuda con algo más?`;
+          }
+          
+          // Intentar obtener más información
+          try {
+            const paymentInfo = await dbService.getClientPaymentInfo(intent.cedula);
+            if (paymentInfo) {
+              let response = `📊 **Información de cuenta**\n\n`;
+              response += `Cliente: ${paymentInfo.clientName}\n`;
+              response += `Cédula: ${intent.cedula}\n\n`;
+              
+              if (paymentInfo.pendingAmount > 0) {
+                response += `💰 **Saldo pendiente:** $${paymentInfo.pendingAmount.toFixed(2)}\n`;
+                response += `✅ Total pagado: $${paymentInfo.totalPaid.toFixed(2)}\n`;
+                
+                if (paymentInfo.reservaInfo) {
+                  response += `📍 Sector: ${paymentInfo.reservaInfo.Sector}\n`;
+                  response += `💵 Precio total: $${paymentInfo.reservaInfo.PrecioValor.toFixed(2)}\n`;
+                }
+                
+                if (paymentInfo.paymentHistory.length > 0) {
+                  response += `\n📅 Últimos pagos:\n`;
+                  paymentInfo.paymentHistory.slice(0, 3).forEach(pago => {
+                    response += `• $${pago.Monto.toFixed(2)} - ${new Date(pago.FechaPago).toLocaleDateString()}\n`;
+                  });
+                }
+              } else {
+                response += `✅ **No tiene deudas pendientes**\n`;
+                response += `Cuenta al día`;
+              }
+              
+              setConversationContext({});
+              return response + '\n\n¿Necesitas algo más?';
+            }
+          } catch (error) {
+            console.log('Error obteniendo detalles de pago');
+          }
+          
+          setConversationContext({});
+          return deudaInfo + '\n\n¿Necesitas consultar algo más?';
+        } 
+        else if (conversationContext.intentType === 'buscarFamiliar') {
+          const familiarInfo = await dbService.buscarFamiliarPorCedula(intent.cedula);
+          setConversationContext({});
+          return familiarInfo + '\n\n¿Hay algo más en lo que pueda ayudarte?';
+        }
+      } else if (intent.negacion) {
+        setConversationContext({});
+        return 'Entendido. ¿En qué más puedo ayudarte?';
+      } else {
+        return 'Por favor, proporciona una cédula de 10 dígitos para continuar.\n\nEjemplo: 1234567890';
+      }
+    }
+    
+    else if (conversationContext.waitingFor === 'nombre') {
+      if (intent.negacion) {
+        setConversationContext({});
+        return 'Entendido. ¿En qué más puedo ayudarte?';
+      }
+      
+      // Extraer el nombre (quitar palabras comunes)
+      const palabrasComunes = ['buscar', 'a', 'el', 'la', 'mi', 'familiar'];
+      const palabras = message.split(' ').filter(p => 
+        !palabrasComunes.includes(p.toLowerCase()) && p.length > 2
+      );
+      
+      if (palabras.length > 0) {
+        const nombre = palabras.join(' ');
+        const resultado = await dbService.buscarFamiliarPorNombre(nombre);
+        
+        setConversationContext({});
+        
+        if (resultado.includes('no se encontró')) {
+          return `No encontré registros para "${nombre}".\n\n` +
+                 `Puedes intentar con:\n` +
+                 `• Solo el apellido\n` +
+                 `• Nombre completo\n` +
+                 `• O proporcionar la cédula del responsable\n\n` +
+                 `¿Deseas intentar de otra forma?`;
+        }
+        
+        return resultado + '\n\n¿Necesitas algo más?';
+      } else {
+        return 'Por favor, proporciona el nombre completo del familiar que buscas.';
+      }
+    }
+    
+    else if (conversationContext.waitingFor === 'datos_reserva') {
+      if (intent.negacion) {
+        setConversationContext({});
+        return 'Entendido. Si cambias de opinión, estoy aquí para ayudarte.\n\n¿Hay algo más que necesites?';
+      }
+      
+      // Aquí explicar el proceso de reserva
+      setConversationContext({});
+      return `📝 **Proceso para realizar una reserva:**\n\n` +
+             `Para hacer una reserva necesitas:\n\n` +
+             `1️⃣ **Documentos requeridos:**\n` +
+             `   • Cédula del solicitante\n` +
+             `   • Datos del familiar fallecido\n` +
+             `   • Comprobante de domicilio\n\n` +
+             `2️⃣ **Información necesaria:**\n` +
+             `   • Sector de preferencia\n` +
+             `   • Forma de pago (contado/crédito)\n\n` +
+             `3️⃣ **Pasos a seguir:**\n` +
+             `   • Visitar nuestras oficinas\n` +
+             `   • Seleccionar la bóveda disponible\n` +
+             `   • Firmar contrato\n` +
+             `   • Realizar primer pago\n\n` +
+             `📍 **Horario de atención:**\n` +
+             `Lunes a Viernes: 8:00 AM - 5:00 PM\n` +
+             `Sábados: 8:00 AM - 2:00 PM\n\n` +
+             `¿Te gustaría información sobre precios o bóvedas disponibles?`;
+    }
+    
+    return null;
+  };
+
+  // Procesar mensaje principal
+  const processMessage = async (message: string) => {
+    const dbService = DatabaseService.getInstance();
+    const intent = detectIntent(message);
+    
+    console.log('Intención detectada:', intent);
+    console.log('Contexto actual:', conversationContext);
+    
+    // Primero verificar si hay respuesta contextual
+    const contextualResponse = await processContextualResponse(message);
+    if (contextualResponse) {
+      return contextualResponse;
+    }
+    
+    // CONSULTA DE SALDOS/DEUDAS
+    if (intent.quiereSaldos) {
+      if (intent.cedula) {
+        // Tiene cédula, buscar directamente
+        const deudaInfo = await dbService.consultarDeudasPorCedula(intent.cedula);
+        
+        if (!deudaInfo.includes('no se encontró')) {
+          try {
+            const paymentInfo = await dbService.getClientPaymentInfo(intent.cedula);
+            if (paymentInfo) {
+              let response = `📊 **Información de cuenta**\n\n`;
+              response += `Cliente: ${paymentInfo.clientName}\n`;
+              
+              if (paymentInfo.pendingAmount > 0) {
+                response += `\n💰 **Saldo pendiente:** $${paymentInfo.pendingAmount.toFixed(2)}\n`;
+                response += `✅ Total pagado: $${paymentInfo.totalPaid.toFixed(2)}\n`;
+                
+                if (paymentInfo.reservaInfo) {
+                  response += `📍 Sector: ${paymentInfo.reservaInfo.Sector}\n`;
+                }
+              } else {
+                response += `\n✅ **No tiene deudas pendientes**`;
+              }
+              
+              return response + '\n\n¿Necesitas algo más?';
+            }
+          } catch (error) {
+            console.log('Error obteniendo detalles');
+          }
+        }
+        
+        return deudaInfo + '\n\n¿Deseas consultar algo más?';
+      } else {
+        // No tiene cédula, pedirla
+        setConversationContext({ waitingFor: 'cedula', intentType: 'saldos' });
+        return '📋 Para consultar tus saldos pendientes, necesito tu número de cédula.\n\n' +
+               'Por favor, proporciona tu cédula de 10 dígitos:';
+      }
+    }
+    
+    // BUSCAR FAMILIAR
+    else if (intent.quiereBuscarFamiliar) {
+      if (intent.cedula) {
+        const resultado = await dbService.buscarFamiliarPorCedula(intent.cedula);
+        return resultado + '\n\n¿Hay algo más en lo que pueda ayudarte?';
+      } else {
+        // Verificar si hay un nombre en el mensaje
+        const palabrasComunes = ['donde', 'esta', 'está', 'mi', 'familiar', 'buscar', 'encuentro'];
+        const palabras = message.split(' ').filter(p => 
+          !palabrasComunes.includes(p.toLowerCase()) && p.length > 2
+        );
+        
+        if (palabras.length >= 2) {
+          // Parece que hay un nombre
+          const nombre = palabras.join(' ');
+          const resultado = await dbService.buscarFamiliarPorNombre(nombre);
+          
+          if (resultado.includes('no se encontró')) {
+            setConversationContext({ waitingFor: 'nombre', intentType: 'buscarFamiliar' });
+            return `No encontré registros para "${nombre}".\n\n` +
+                   `¿Podrías proporcionarme:\n` +
+                   `• El nombre completo del familiar\n` +
+                   `• O la cédula del responsable (10 dígitos)?`;
+          }
+          
+          return resultado + '\n\n¿Necesitas algo más?';
+        } else {
+          setConversationContext({ waitingFor: 'nombre', intentType: 'buscarFamiliar' });
+          return '🔍 Para buscar a tu familiar, necesito más información.\n\n' +
+                 'Por favor proporciona:\n' +
+                 '• El nombre completo del familiar\n' +
+                 '• O la cédula del responsable (10 dígitos)';
+        }
+      }
+    }
+    
+    // CONSULTA DE BÓVEDAS
+    else if (intent.quiereBovedas) {
+      const bovedas = await dbService.getBovedasDisponibles();
+      
+      if (bovedas.length > 0) {
+        const sectores = [...new Set(bovedas.map(b => b.Division))];
+        
+        let response = '🏛️ **BÓVEDAS DISPONIBLES**\n\n';
+        response += `✅ Tenemos ${bovedas.length} bóvedas disponibles\n\n`;
+        response += '📍 **Distribución por sectores:**\n';
+        
+        sectores.forEach(sector => {
+          const cantidad = bovedas.filter(b => b.Division === sector).length;
+          response += `• ${sector}: ${cantidad} ${cantidad === 1 ? 'bóveda' : 'bóvedas'}\n`;
+        });
+        
+        response += '\n¿Te gustaría información sobre precios o hacer una reserva?';
+        return response;
+      } else {
+        return '❌ En este momento no hay bóvedas disponibles.\n\n' +
+               'Te sugiero:\n' +
+               '• Contactar con nuestras oficinas para lista de espera\n' +
+               '• Llamar al: +593 2 XXX-XXXX\n\n' +
+               '¿Necesitas algo más?';
+      }
+    }
+    
+    // CONSULTA DE PRECIOS
+    else if (intent.quierePrecios) {
+      const precios = await dbService.getPrecios();
+      
+      if (precios.length > 0) {
+        let response = '💵 **LISTA DE PRECIOS POR SECTOR**\n\n';
+        
+        const preciosBajos = precios.filter(p => p.PrecioValor <= 100);
+        const preciosMedios = precios.filter(p => p.PrecioValor > 100 && p.PrecioValor <= 500);
+        const preciosAltos = precios.filter(p => p.PrecioValor > 500);
+        
+        if (preciosBajos.length > 0) {
+          response += '🟢 **Económicos** (hasta $100):\n';
+          preciosBajos.forEach(p => {
+            response += `• ${p.Sector}: $${p.PrecioValor.toFixed(2)}\n`;
+          });
+        }
+        
+        if (preciosMedios.length > 0) {
+          response += '\n🟡 **Estándar** ($100-$500):\n';
+          preciosMedios.forEach(p => {
+            response += `• ${p.Sector}: $${p.PrecioValor.toFixed(2)}\n`;
+          });
+        }
+        
+        if (preciosAltos.length > 0) {
+          response += '\n🔴 **Premium** (más de $500):\n';
+          preciosAltos.forEach(p => {
+            response += `• ${p.Sector}: $${p.PrecioValor.toFixed(2)}\n`;
+          });
+        }
+        
+        response += '\n¿Te interesa algún sector en particular?';
+        return response;
+      } else {
+        return 'No pude obtener la lista de precios.\n' +
+               'Por favor contacta a nuestras oficinas:\n' +
+               '📞 +593 2 XXX-XXXX';
+      }
+    }
+    
+    // QUIERE HACER RESERVA
+    else if (intent.quiereReservar) {
+      setConversationContext({ waitingFor: 'datos_reserva', intentType: 'reservar' });
+      return '📝 Me alegra que quieras hacer una reserva.\n\n' +
+             'Las reservas se realizan presencialmente en nuestras oficinas.\n\n' +
+             '¿Te gustaría conocer:\n' +
+             '• Los requisitos necesarios\n' +
+             '• El proceso de reserva\n' +
+             '• Los horarios de atención?\n\n' +
+             'Responde "Sí" para ver esta información.';
+    }
+    
+    // SALUDO
+    else if (intent.saludo) {
+      return '¡Hola! 👋 Bienvenido al asistente del Cementerio San Agustín.\n\n' +
+             'Puedo ayudarte con:\n' +
+             '• 💰 Consultar saldos y deudas\n' +
+             '• 🔍 Ubicar familiares\n' +
+             '• 🏛️ Ver bóvedas disponibles\n' +
+             '• 💵 Lista de precios\n' +
+             '• 📝 Información para reservas\n\n' +
+             '¿Qué necesitas hoy?';
+    }
+    
+    // SI HAY CÉDULA SOLA
+    else if (intent.cedula) {
+      const familiarInfo = await dbService.buscarFamiliarPorCedula(intent.cedula);
+      const deudaInfo = await dbService.consultarDeudasPorCedula(intent.cedula);
+      
+      let response = `📊 Información para cédula ${intent.cedula}:\n\n`;
+      response += familiarInfo;
+      
+      if (!deudaInfo.includes('no tiene deudas')) {
+        response += '\n\n' + deudaInfo;
+      }
+      
+      return response + '\n\n¿Necesitas información adicional?';
+    }
+    
+    // NO SE ENTIENDE LA CONSULTA
+    return '❓ No entendí bien tu consulta.\n\n' +
+           'Puedo ayudarte si me dices:\n' +
+           '• "Necesito saber mis saldos"\n' +
+           '• "¿Dónde está [nombre del familiar]?"\n' +
+           '• "¿Hay bóvedas disponibles?"\n' +
+           '• "¿Cuáles son los precios?"\n' +
+           '• "Quiero hacer una reserva"\n\n' +
+           'O proporciona una cédula de 10 dígitos para consultas específicas.';
+  };
 
   const handleSendMessage = async () => {
     if (!inputText.trim() || isLoading) return;
@@ -52,28 +436,7 @@ export default function FloatingChatBot() {
     setIsLoading(true);
 
     try {
-      const dbService = DatabaseService.getInstance();
-      const openaiService = OpenAIService.getInstance();
-      
-      // Obtener contexto de la base de datos
-      let context = await dbService.getContextForAI();
-      
-      // Procesar consultas específicas
-      const message = userMessage.text.toLowerCase();
-      if (message.includes('bóveda') || message.includes('boveda') || message.includes('disponible')) {
-        const bovedas = await dbService.getBovedasDisponibles();
-        context += `\nBóvedas disponibles actualmente: ${bovedas.map(b => b.Division).join(', ')}`;
-      }
-      
-      if (message.includes('cédula') || message.includes('cedula')) {
-        const cedula = message.match(/\d{10}/)?.[0];
-        if (cedula) {
-          const resultado = await dbService.consultarDeudasPorCedula(cedula);
-          context += `\nConsulta de deuda: ${resultado}`;
-        }
-      }
-
-      const response = await openaiService.sendMessage(userMessage.text, context);
+      const response = await processMessage(userMessage.text);
       
       const botMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
@@ -83,10 +446,13 @@ export default function FloatingChatBot() {
       };
 
       setMessages(prev => [...prev, botMessage]);
+      
     } catch (error) {
+      console.error('Error:', error);
+      
       const errorMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
-        text: 'Disculpa, hubo un problema procesando tu consulta. Por favor, intenta nuevamente.',
+        text: '❌ Hubo un problema al procesar tu consulta.\n\nPor favor intenta de nuevo o contacta nuestras oficinas.',
         isUser: false,
         timestamp: new Date(),
       };
@@ -148,7 +514,11 @@ export default function FloatingChatBot() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.messagesContainer} showsVerticalScrollIndicator={false}>
+            <ScrollView 
+              ref={scrollViewRef}
+              style={styles.messagesContainer} 
+              showsVerticalScrollIndicator={false}
+            >
               {messages.map((message) => (
                 <View
                   key={message.id}

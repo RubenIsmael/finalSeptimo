@@ -1,7 +1,8 @@
-const OPENAI_API_KEY = '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';
+// services/openai.ts
+const OPENAI_API_KEY = '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';
 
 export interface ChatMessage {
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   content: string;
 }
 
@@ -24,15 +25,16 @@ export class OpenAIService {
     try {
       const systemPrompt = `Eres un asistente virtual del Cementerio Parroquial San Agustín en La Concordia. 
       Tu función es ayudar a las familias con información sobre:
-      - Disponibilidad de bóvedas
+      - Disponibilidad de bóvedas y sus precios
       - Estado de pagos y deudas pendientes
       - Ubicación de familiares en el cementerio
       - Información sobre reservas y contratos
-      - Precios y servicios
+      - Precios por sector
       
-      Siempre responde de manera empática, respetuosa y con un tono cálido, considerando que las personas pueden estar pasando por momentos difíciles.
+      IMPORTANTE: Cuando te proporcione información de la base de datos, debes usarla para responder de manera precisa.
+      Siempre responde de manera empática, respetuosa y con un tono cálido.
       
-      ${context ? `Información actual de la base de datos: ${context}` : ''}`;
+      ${context ? `INFORMACIÓN ACTUAL DE LA BASE DE DATOS:\n${context}` : ''}`;
 
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -51,15 +53,28 @@ export class OpenAIService {
         }),
       });
 
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('OpenAI API Error:', errorData);
+        throw new Error(errorData.error?.message || 'Error en OpenAI API');
+      }
+
       const data = await response.json();
       
       if (data.error) {
+        console.error('OpenAI Error:', data.error);
         throw new Error(data.error.message);
       }
       
       return data.choices[0]?.message?.content || 'Lo siento, no pude procesar tu consulta en este momento.';
     } catch (error) {
       console.error('Error calling OpenAI:', error);
+      
+      // Si OpenAI falla, devolver la información de la BD directamente
+      if (context && context.length > 0) {
+        return `Información del sistema:\n${context}`;
+      }
+      
       return 'Disculpa, estoy experimentando dificultades técnicas. Por favor, intenta nuevamente o contacta directamente con nuestro personal.';
     }
   }

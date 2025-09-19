@@ -34,12 +34,12 @@ export default function AboutScreen() {
           {/* Hero Image */}
           <View style={styles.heroContainer}>
             <Image
-              source={{ uri: 'https://images.pexels.com/photos/2893685/pexels-photo-2893685.jpeg?auto=compress&cs=tinysrgb&w=800' }}
+              source={{ uri: 'https://th.bing.com/th/id/R.7c4dbe2d26b396233f56a2c0331c7831?rik=GrRtgcEBHCFiRA&riu=http%3a%2f%2f2.bp.blogspot.com%2f_EZ16vWYvHHg%2fS8oZ5dJ0ZWI%2fAAAAAAAAKgE%2fkSJmSc1W5zA%2fs1600%2fwww.BancodeImagenesGratuitas.com%2b-Flores-24.jpg&ehk=%2b7N%2bKBNgmkKG70m3itVOLFIK6c5WhS3fNzXBscxtJ58%3d&risl=&pid=ImgRaw&r=0' }}
               style={styles.heroImage}
             />
             <View style={styles.heroOverlay}>
               <Text style={styles.heroTitle}>Cementerio Parroquial San Agustín</Text>
-              <Text style={styles.heroSubtitle}>Más de 12 años sirviendo a la comunidad</Text>
+              <Text style={styles.heroSubtitle}>Sirviendo con dignidad y respeto a las familias de La Concordia</Text>
             </View>
           </View>
 
@@ -54,10 +54,11 @@ export default function AboutScreen() {
                 <Text style={styles.cardTitle}>Nuestra Misión</Text>
               </View>
               <Text style={styles.cardContent}>
-                Brindar servicios funerarios con dignidad, respeto y profesionalismo, 
-                ofreciendo a las familias de La Concordia y Santo Domingo un lugar 
-                sagrado de descanso eterno para sus seres queridos, con instalaciones 
-                adecuadas y atención personalizada en momentos difíciles.
+                Brindar servicios funerarios integrales con dignidad, respeto y 
+                profesionalismo, ofreciendo a las familias del cantón La Concordia 
+                y la provincia de Santo Domingo de los Tsáchilas un espacio sagrado 
+                de descanso eterno, con instalaciones dignas y atención compasiva, 
+                respetando las tradiciones cristianas y culturales de nuestra comunidad.
               </Text>
             </LinearGradient>
           </View>
@@ -73,10 +74,12 @@ export default function AboutScreen() {
                 <Text style={styles.cardTitle}>Nuestra Visión</Text>
               </View>
               <Text style={styles.cardContent}>
-                Ser el cementerio de referencia en la región, reconocido por la calidad 
-                de nuestros servicios, la modernización de nuestros procesos mediante 
-                tecnología innovadora, y el compromiso constante con el bienestar de 
-                las familias que confían en nosotros.
+                Ser reconocidos como el principal cementerio parroquial del cantón La 
+                Concordia, destacando por la excelencia en nuestros servicios, la 
+                preservación de la memoria histórica local, y nuestro compromiso con 
+                la modernización tecnológica que facilite a las familias el acceso a 
+                nuestros servicios, manteniendo siempre el respeto por las tradiciones 
+                y valores espirituales de nuestra comunidad.
               </Text>
             </LinearGradient>
           </View>
@@ -137,12 +140,18 @@ export default function AboutScreen() {
                 <Text style={styles.cardTitle}>Nuestra Historia</Text>
               </View>
               <Text style={styles.cardContent}>
-                Establecido hace más de 12 años, el Cementerio Parroquial San Agustín 
-                ha sido testigo del crecimiento de La Concordia y ha acompañado a 
-                cientos de familias en sus momentos más difíciles. Con el paso del 
-                tiempo, hemos evolucionado para adaptarnos a las necesidades cambiantes 
-                de nuestra comunidad, manteniendo siempre nuestros valores fundamentales 
-                de respeto y servicio.
+                El Cementerio Parroquial San Agustín ha sido parte fundamental de la 
+                historia de La Concordia, acompañando a las familias de nuestra comunidad 
+                a través de las generaciones. Desde la elevación de La Concordia a cantón 
+                en 2007 y su posterior integración a la provincia de Santo Domingo de los 
+                Tsáchilas en 2013, nuestro cementerio ha sido testigo del crecimiento y 
+                desarrollo de esta tierra próspera. 
+                {'\n\n'}
+                Como institución parroquial católica, hemos mantenido viva la tradición 
+                cristiana de dar sepultura digna a nuestros hermanos, adaptándonos a los 
+                tiempos modernos sin perder nuestra esencia espiritual y comunitaria. 
+                Nuestro compromiso es preservar la memoria de quienes descansan aquí y 
+                brindar consuelo a sus familias con servicios que honren su legado.
               </Text>
             </LinearGradient>
           </View>
