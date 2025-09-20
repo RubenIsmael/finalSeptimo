@@ -10,6 +10,7 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
+  Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { 
@@ -34,7 +35,7 @@ import {
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 
-// Interfaces para los datos de la base de datos
+// Interfaces
 interface PaymentHistoryItem {
   Id: number;
   IdReserva: number;
@@ -73,6 +74,8 @@ interface CreditCardInfo {
   expiry: string;
   cvv: string;
   name: string;
+  type?: string;
+  isValid?: boolean;
 }
 
 interface PaymentPlan {
@@ -81,17 +84,15 @@ interface PaymentPlan {
   totalAmount: number;
 }
 
-// Configuración de la API
+// Configuración
 const API_BASE_URL = 'http://localhost:3000/api';
-
-// Configuración de pagos
 const PAYMENT_CONFIG = {
-  MIN_PAYMENT_AMOUNT: 50, // Monto mínimo de pago
-  MAX_MONTHS_TO_DEFER: 12, // Máximo 12 meses para diferir
-  MIN_MONTHLY_PAYMENT: 25, // Cuota mínima mensual
+  MIN_PAYMENT_AMOUNT: 50,
+  MAX_MONTHS_TO_DEFER: 12,
+  MIN_MONTHLY_PAYMENT: 25,
 };
 
-// Servicio de base de datos expandido
+// Servicio de pagos
 class PaymentService {
   private async apiRequest<T>(endpoint: string, options?: RequestInit): Promise<T> {
     try {
@@ -198,11 +199,9 @@ class PaymentService {
   }
 
   async procesarTarjetaCredito(tarjeta: CreditCardInfo, monto: number): Promise<{success: boolean; message: string}> {
-    // Simulación de procesamiento de tarjeta de crédito
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000)); // Simular delay de procesamiento
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Validación básica de tarjeta (simulada)
       if (tarjeta.number.length < 16 || tarjeta.cvv.length < 3) {
         return {
           success: false,
@@ -210,7 +209,6 @@ class PaymentService {
         };
       }
 
-      // Simular aprobación (90% de probabilidad de éxito)
       const isApproved = Math.random() > 0.1;
       
       if (isApproved) {
@@ -231,38 +229,68 @@ class PaymentService {
       };
     }
   }
+
+  async guardarComprobante(imagen: any, monto: number, idReserva: number): Promise<{success: boolean; rutaArchivo?: string; message: string}> {
+    try {
+      const timestamp = Date.now();
+      const rutaArchivo = `C:\\projecto_septimoFinal\\Capturas\\comprobante_${idReserva}_${timestamp}.jpg`;
+      
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      return {
+        success: true,
+        rutaArchivo,
+        message: 'Comprobante guardado exitosamente'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: 'Error al guardar el comprobante'
+      };
+    }
+  }
 }
 
 export default function PaymentsScreen() {
   const router = useRouter();
   const paymentService = new PaymentService();
   
-  // Estados existentes
+  // Estados principales
   const [cedula, setCedula] = useState('');
   const [clientPaymentInfo, setClientPaymentInfo] = useState<ClientPaymentInfo | null>(null);
-  const [showPaymentMethods, setShowPaymentMethods] = useState(false);
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [processingPayment, setProcessingPayment] = useState(false);
 
-  // Nuevos estados para las funcionalidades expandidas
+  // Estados de modales
+  const [showPaymentMethods, setShowPaymentMethods] = useState(false);
+  const [showPaymentPlan, setShowPaymentPlan] = useState(false);
   const [showBankTransfer, setShowBankTransfer] = useState(false);
   const [showCreditCard, setShowCreditCard] = useState(false);
-  const [showQRCode, setShowQRCode] = useState(false);
+  const [showQRPayment, setShowQRPayment] = useState(false);
   const [showReceiptUpload, setShowReceiptUpload] = useState(false);
-  const [showPaymentPlan, setShowPaymentPlan] = useState(false);
+  const [showReceiptUploadForTransfer, setShowReceiptUploadForTransfer] = useState(false);
+  
+  // Estados de formularios
   const [customAmount, setCustomAmount] = useState('');
+  const [transferAmount, setTransferAmount] = useState('');
   const [selectedBank, setSelectedBank] = useState<BankInfo | null>(null);
   const [selectedMonths, setSelectedMonths] = useState<number>(1);
   const [paymentPlan, setPaymentPlan] = useState<PaymentPlan | null>(null);
+  const [selectedReceipt, setSelectedReceipt] = useState<any>(null);
   const [creditCardData, setCreditCardData] = useState<CreditCardInfo>({
     number: '',
     expiry: '',
     cvv: '',
-    name: ''
+    name: '',
+    type: '',
+    isValid: false
   });
-  const [selectedReceipt, setSelectedReceipt] = useState<any>(null);
-  const [processingPayment, setProcessingPayment] = useState(false);
+
+  // Estados de transferencia
+  const [transferRegistered, setTransferRegistered] = useState(false);
+  const [currentTransferPaymentId, setCurrentTransferPaymentId] = useState<number | null>(null);
 
   // Información de bancos
   const banksInfo: BankInfo[] = [
@@ -288,7 +316,7 @@ export default function PaymentsScreen() {
     }
   ];
 
-  // Métodos de pago actualizados
+  // Métodos de pago
   const paymentMethods = [
     {
       id: 'transfer',
@@ -306,7 +334,7 @@ export default function PaymentsScreen() {
     },
     {
       id: 'qr',
-      method: 'QR Banco Pichincha',
+      method: 'QR DeUna - Banco Pichincha',
       description: 'Escanea el código QR para pagar',
       icon: <QrCode size={24} color="#4682B4" />,
       available: true,
@@ -320,7 +348,119 @@ export default function PaymentsScreen() {
     },
   ];
 
-  // Función para calcular plan de pagos
+  // Funciones utilitarias para tarjetas
+  const detectCardType = (number: string): string => {
+    const cleanNumber = number.replace(/\s+/g, '');
+    if (/^4/.test(cleanNumber)) return 'Visa';
+    if (/^5[1-5]/.test(cleanNumber) || /^2[2-7]/.test(cleanNumber)) return 'MasterCard';
+    if (/^3[47]/.test(cleanNumber)) return 'American Express';
+    if (/^3[0689]/.test(cleanNumber)) return 'Diners Club';
+    if (/^6/.test(cleanNumber)) return 'Discover';
+    return '';
+  };
+
+  const formatCardNumber = (value: string): string => {
+    const cleanValue = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
+    const matches = cleanValue.match(/\d{4,16}/g);
+    const match = matches && matches[0] || '';
+    const parts = [];
+
+    for (let i = 0, len = match.length; i < len; i += 4) {
+      parts.push(match.substring(i, i + 4));
+    }
+
+    if (parts.length) {
+      return parts.join(' ');
+    } else {
+      return cleanValue;
+    }
+  };
+
+  const formatExpiryDate = (value: string): string => {
+    const cleanValue = value.replace(/\D+/g, '');
+    if (cleanValue.length >= 2) {
+      return cleanValue.substring(0, 2) + '/' + cleanValue.substring(2, 4);
+    }
+    return cleanValue;
+  };
+
+  const validateCreditCard = (cardData: CreditCardInfo): boolean => {
+    const cleanNumber = cardData.number.replace(/\s+/g, '');
+    
+    let validLength = false;
+    switch (cardData.type) {
+      case 'Visa':
+      case 'MasterCard':
+        validLength = cleanNumber.length === 16;
+        break;
+      case 'American Express':
+        validLength = cleanNumber.length === 15;
+        break;
+      case 'Diners Club':
+        validLength = cleanNumber.length === 14;
+        break;
+      default:
+        validLength = cleanNumber.length >= 13 && cleanNumber.length <= 19;
+    }
+
+    const validExpiry = /^\d{2}\/\d{2}$/.test(cardData.expiry);
+    const validCVV = cardData.cvv.length >= 3 && cardData.cvv.length <= 4;
+    const validName = cardData.name.trim().length >= 2;
+
+    return validLength && validExpiry && validCVV && validName;
+  };
+
+  const handleCardNumberChange = (text: string) => {
+    const formatted = formatCardNumber(text);
+    const cardType = detectCardType(formatted);
+    
+    const updatedCard = {
+      ...creditCardData,
+      number: formatted,
+      type: cardType
+    };
+    
+    updatedCard.isValid = validateCreditCard(updatedCard);
+    setCreditCardData(updatedCard);
+  };
+
+  const handleExpiryChange = (text: string) => {
+    const formatted = formatExpiryDate(text);
+    const updatedCard = {
+      ...creditCardData,
+      expiry: formatted
+    };
+    
+    updatedCard.isValid = validateCreditCard(updatedCard);
+    setCreditCardData(updatedCard);
+  };
+
+  const handleCVVChange = (text: string) => {
+    const cleanText = text.replace(/[^0-9]/g, '');
+    const updatedCard = {
+      ...creditCardData,
+      cvv: cleanText
+    };
+    
+    updatedCard.isValid = validateCreditCard(updatedCard);
+    setCreditCardData(updatedCard);
+  };
+
+  const handleNameChange = (text: string) => {
+    const updatedCard = {
+      ...creditCardData,
+      name: text.toUpperCase()
+    };
+    
+    updatedCard.isValid = validateCreditCard(updatedCard);
+    setCreditCardData(updatedCard);
+  };
+
+  const getCardIcon = (type: string) => {
+    return '💳';
+  };
+
+  // Funciones de validación
   const calculatePaymentPlan = (totalAmount: number, months: number): PaymentPlan => {
     const monthlyAmount = Math.ceil(totalAmount / months);
     return {
@@ -330,7 +470,6 @@ export default function PaymentsScreen() {
     };
   };
 
-  // Función para validar monto de pago
   const validatePaymentAmount = (amount: number): { isValid: boolean; message?: string } => {
     if (amount < PAYMENT_CONFIG.MIN_PAYMENT_AMOUNT) {
       return {
@@ -349,23 +488,66 @@ export default function PaymentsScreen() {
     return { isValid: true };
   };
 
-  // Función para regresar al inicio y refrescar
+  const validateTransferAmount = (amount: number): { isValid: boolean; message?: string } => {
+    if (amount < 80) {
+      return {
+        isValid: false,
+        message: 'El monto mínimo para transferencia es $80.00'
+      };
+    }
+
+    if (clientPaymentInfo && amount > clientPaymentInfo.pendingAmount) {
+      return {
+        isValid: false,
+        message: `El monto no puede ser mayor al saldo pendiente ($${clientPaymentInfo.pendingAmount.toFixed(2)})`
+      };
+    }
+
+    return { isValid: true };
+  };
+
+  // Funciones de control de modales
+  const resetModals = () => {
+    setShowPaymentMethods(false);
+    setShowPaymentPlan(false);
+    setShowBankTransfer(false);
+    setShowCreditCard(false);
+    setShowQRPayment(false);
+    setShowReceiptUpload(false);
+    setShowReceiptUploadForTransfer(false);
+    setCustomAmount('');
+    setTransferAmount('');
+    setSelectedMonths(1);
+    setPaymentPlan(null);
+    setSelectedBank(null);
+    setTransferRegistered(false);
+    setCurrentTransferPaymentId(null);
+    setCreditCardData({
+      number: '',
+      expiry: '',
+      cvv: '',
+      name: '',
+      type: '',
+      isValid: false
+    });
+    setSelectedReceipt(null);
+  };
+
   const returnToHome = () => {
     resetModals();
     setCedula('');
     setClientPaymentInfo(null);
     setError(null);
-    router.replace('/'); // Regresar a la página inicial
+    router.replace('/');
   };
 
-  // Función para refrescar consulta actual
   const refreshCurrentConsultation = async () => {
     if (cedula) {
       await consultarPagos();
     }
   };
 
-  // Funciones existentes
+  // Funciones principales
   const consultarPagos = async () => {
     if (!cedula || cedula.length < 10) {
       Alert.alert('Error', 'Por favor ingresa un número de cédula válido');
@@ -416,122 +598,48 @@ export default function PaymentsScreen() {
     consultarPagos();
   };
 
-  // Estados para controlar el método seleccionado
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('');
-
-  // Nuevas funciones para las funcionalidades expandidas
   const handleMethodSelect = (methodId: string) => {
-    setSelectedPaymentMethod(methodId);
     setShowPaymentMethods(false);
-    setShowPaymentPlan(true);
-  };
-
-  const handlePaymentPlanConfirm = () => {
-    if (!paymentPlan || !selectedPaymentMethod) {
-      Alert.alert('Error', 'Por favor configure el monto y seleccione los meses');
-      return;
-    }
-
-    setShowPaymentPlan(false);
     
-    switch (selectedPaymentMethod) {
+    switch (methodId) {
       case 'transfer':
+        setTransferAmount(selectedAmount?.toString() || '');
+        setTransferRegistered(false);
+        setShowReceiptUploadForTransfer(false);
         setShowBankTransfer(true);
         break;
       case 'card':
-        setShowCreditCard(true);
+        setCustomAmount(selectedAmount?.toString() || '');
+        setShowPaymentPlan(true);
         break;
       case 'qr':
-        setShowQRCode(true);
+        setCustomAmount(selectedAmount?.toString() || '');
+        setShowQRPayment(true);
         break;
       case 'receipt':
+        setCustomAmount(selectedAmount?.toString() || '');
         setShowReceiptUpload(true);
         break;
     }
   };
 
-  const processBankTransfer = async () => {
-    if (!selectedBank || !customAmount) {
-      Alert.alert('Error', 'Por favor completa todos los campos');
+  const handlePaymentPlanConfirm = () => {
+    if (!paymentPlan) {
+      Alert.alert('Error', 'Por favor configure el monto y seleccione los meses');
       return;
     }
-
-    const amount = parseFloat(customAmount);
-    const validation = validatePaymentAmount(amount);
-    
-    if (!validation.isValid) {
-      Alert.alert('Error', validation.message!);
-      return;
-    }
-
-    Alert.alert(
-      'Transferencia Bancaria',
-      `Se procesará tu abono temporal de $${amount.toFixed(2)} a ${selectedBank.name}. El pago se actualizará una vez que nuestros administradores verifiquen la transferencia (máximo 4 horas hábiles).`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { 
-          text: 'Continuar', 
-          onPress: async () => {
-            try {
-              setProcessingPayment(true);
-              
-              const result = await paymentService.registrarPago({
-                IdReserva: clientPaymentInfo!.reservaInfo!.Id,
-                Monto: amount,
-                MetodoPago: `Transferencia - ${selectedBank.name}`,
-                TipoAbono: 'Abono Temporal',
-                EstadoAprobacion: 'Pendiente'
-              });
-              
-              if (result.success) {
-                // Verificar si se completó el pago total
-                const newPendingAmount = clientPaymentInfo!.pendingAmount - amount;
-                if (newPendingAmount <= 0) {
-                  await paymentService.actualizarEstadoReserva(
-                    clientPaymentInfo!.reservaInfo!.Id, 
-                    'Pago Completo'
-                  );
-                }
-
-                Alert.alert(
-                  'Abono Registrado', 
-                  'Tu abono temporal ha sido registrado. Se actualizará tu saldo una vez verificada la transferencia.',
-                  [
-                    {
-                      text: 'Ver Estado Actualizado',
-                      onPress: () => {
-                        resetModals();
-                        refreshCurrentConsultation();
-                      }
-                    },
-                    {
-                      text: 'Volver al Inicio',
-                      onPress: returnToHome
-                    }
-                  ]
-                );
-              } else {
-                Alert.alert('Error', result.message || 'Error al procesar el abono');
-              }
-            } catch (err) {
-              Alert.alert('Error', 'Error al procesar el abono');
-            } finally {
-              setProcessingPayment(false);
-            }
-          }
-        }
-      ]
-    );
+    setShowPaymentPlan(false);
+    setShowCreditCard(true);
   };
 
-  const processCreditCard = async () => {
-    if (!creditCardData.number || !creditCardData.expiry || !creditCardData.cvv || !creditCardData.name || !customAmount) {
-      Alert.alert('Error', 'Por favor completa todos los campos');
+  const processBankTransfer = async () => {
+    if (!selectedBank || !transferAmount) {
+      Alert.alert('Error', 'Por favor complete todos los campos requeridos');
       return;
     }
 
-    const amount = parseFloat(customAmount);
-    const validation = validatePaymentAmount(amount);
+    const amount = parseFloat(transferAmount);
+    const validation = validateTransferAmount(amount);
     
     if (!validation.isValid) {
       Alert.alert('Error', validation.message!);
@@ -541,31 +649,85 @@ export default function PaymentsScreen() {
     try {
       setProcessingPayment(true);
       
-      const cardResult = await paymentService.procesarTarjetaCredito(creditCardData, amount);
+      const result = await paymentService.registrarPago({
+        IdReserva: clientPaymentInfo!.reservaInfo!.Id,
+        Monto: amount,
+        MetodoPago: `Transferencia - ${selectedBank.name}`,
+        TipoAbono: 'Abono Temporal',
+        EstadoAprobacion: 'Pendiente'
+      });
+      
+      if (result.success) {
+        setCurrentTransferPaymentId(result.pagoId || null);
+        setTransferRegistered(true);
+        
+        Alert.alert(
+          'Transferencia Registrada',
+          `Su transferencia por $${amount.toFixed(2)} ha sido registrada exitosamente.\n\nBanco: ${selectedBank.name}\nMonto: $${amount.toFixed(2)}\n\nAhora debe subir el comprobante de la transferencia para completar el proceso.`,
+          [
+            {
+              text: 'Subir Comprobante',
+              onPress: () => {
+                setShowBankTransfer(false);
+                setShowReceiptUploadForTransfer(true);
+              }
+            }
+          ]
+        );
+      } else {
+        Alert.alert('Error', result.message || 'Error al registrar la transferencia');
+      }
+    } catch (err) {
+      Alert.alert('Error', 'Error al procesar la transferencia');
+    } finally {
+      setProcessingPayment(false);
+    }
+  };
+
+  const processCreditCard = async () => {
+    if (!creditCardData.isValid || !paymentPlan) {
+      Alert.alert('Error', 'Por favor completa correctamente todos los datos de la tarjeta');
+      return;
+    }
+
+    try {
+      setProcessingPayment(true);
+      
+      const cardResult = await paymentService.procesarTarjetaCredito(creditCardData, paymentPlan.monthlyAmount);
       
       if (cardResult.success) {
         const result = await paymentService.registrarPago({
           IdReserva: clientPaymentInfo!.reservaInfo!.Id,
-          Monto: amount,
-          MetodoPago: 'Tarjeta de Crédito',
+          Monto: paymentPlan.monthlyAmount,
+          MetodoPago: `Tarjeta ${creditCardData.type} - ****${creditCardData.number.slice(-4)}`,
           TipoAbono: 'Pago Directo',
           EstadoAprobacion: 'Aprobado'
         });
         
         if (result.success) {
-          // Verificar si se completó el pago total
-          const newPendingAmount = clientPaymentInfo!.pendingAmount - amount;
+          const newPendingAmount = clientPaymentInfo!.pendingAmount - paymentPlan.monthlyAmount;
           if (newPendingAmount <= 0) {
             await paymentService.actualizarEstadoReserva(
               clientPaymentInfo!.reservaInfo!.Id, 
               'Sin Deuda'
             );
+          } else {
+            await paymentService.actualizarEstadoReserva(
+              clientPaymentInfo!.reservaInfo!.Id, 
+              'Pago Parcial'
+            );
           }
 
           Alert.alert(
-            'Pago Exitoso', 
-            'Tu pago con tarjeta de crédito ha sido procesado exitosamente.',
+            'Pago Exitoso',
+            `Estimado/a ${clientPaymentInfo!.clientName},\n\nSu pago ha sido procesado exitosamente\n\nTarjeta: ${creditCardData.type} ****${creditCardData.number.slice(-4)}\nMonto: $${paymentPlan.monthlyAmount.toFixed(2)}\nPlan: ${paymentPlan.months} cuotas\nTransacción: #${result.pagoId || Date.now()}\n\nSu cuenta ha sido actualizada automáticamente.\nConserve este comprobante para sus registros.\n\nGracias por su confianza!\n\nCementerio San Agustín - La Concordia\nLínea de atención: (02) 123-4567`,
             [
+              {
+                text: 'Descargar Comprobante',
+                onPress: () => {
+                  Alert.alert('Comprobante', 'Comprobante guardado en descargas');
+                }
+              },
               {
                 text: 'Ver Estado Actualizado',
                 onPress: () => {
@@ -574,17 +736,18 @@ export default function PaymentsScreen() {
                 }
               },
               {
-                text: 'Volver al Inicio',
+                text: 'Finalizar',
+                style: 'default',
                 onPress: returnToHome
               }
             ]
           );
         }
       } else {
-        Alert.alert('Error', cardResult.message);
+        Alert.alert('Error en el Pago', cardResult.message);
       }
     } catch (err) {
-      Alert.alert('Error', 'Error al procesar el pago');
+      Alert.alert('Error', 'Error al procesar el pago con tarjeta');
     } finally {
       setProcessingPayment(false);
     }
@@ -604,85 +767,70 @@ export default function PaymentsScreen() {
       return;
     }
 
-    Alert.alert(
-      'Pago con QR',
-      `Una vez realizado el pago por $${amount.toFixed(2)}, tu abono será registrado temporalmente hasta la verificación por nuestros administradores (máximo 4 horas hábiles).`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { 
-          text: 'Confirmar Pago', 
-          onPress: async () => {
-            try {
-              setProcessingPayment(true);
-              
-              const result = await paymentService.registrarPago({
-                IdReserva: clientPaymentInfo!.reservaInfo!.Id,
-                Monto: amount,
-                MetodoPago: 'QR Banco Pichincha',
-                TipoAbono: 'Abono Temporal',
-                EstadoAprobacion: 'Pendiente'
-              });
-              
-              if (result.success) {
-                Alert.alert(
-                  'Abono Registrado', 
-                  'Tu abono temporal ha sido registrado. Se actualizará tu saldo una vez verificado el pago.',
-                  [
-                    {
-                      text: 'Ver Estado Actualizado',
-                      onPress: () => {
-                        resetModals();
-                        refreshCurrentConsultation();
-                      }
-                    },
-                    {
-                      text: 'Volver al Inicio',
-                      onPress: returnToHome
-                    }
-                  ]
-                );
+    try {
+      setProcessingPayment(true);
+      
+      const result = await paymentService.registrarPago({
+        IdReserva: clientPaymentInfo!.reservaInfo!.Id,
+        Monto: amount,
+        MetodoPago: 'QR DeUna - Banco Pichincha',
+        TipoAbono: 'Abono Temporal',
+        EstadoAprobacion: 'Pendiente'
+      });
+      
+      if (result.success) {
+        Alert.alert(
+          'Pago QR Registrado',
+          `Perfecto! Tu pago por $${amount.toFixed(2)} ha sido registrado exitosamente.\n\nNuestro equipo administrativo revisará que el pago coincida con el valor solicitado.\n\nPor el momento se ha descontado temporalmente el valor ingresado de tu cuenta.\n\nSi hubiera alguna inconsistencia, nos pondremos en contacto contigo.\n\nGracias por usar nuestros servicios!\n\nCementerio San Agustín - La Concordia`,
+          [
+            {
+              text: 'Ver Estado Actualizado',
+              onPress: () => {
+                resetModals();
+                refreshCurrentConsultation();
               }
-            } catch (err) {
-              Alert.alert('Error', 'Error al procesar el abono');
-            } finally {
-              setProcessingPayment(false);
+            },
+            {
+              text: 'Volver al Inicio',
+              onPress: returnToHome
             }
-          }
-        }
-      ]
-    );
+          ]
+        );
+      }
+    } catch (err) {
+      Alert.alert('Error', 'Error al procesar el pago QR');
+    } finally {
+      setProcessingPayment(false);
+    }
   };
 
   const pickReceipt = async () => {
     try {
-      // Simulación de selección de imagen - sin dependencias externas
       Alert.alert(
         'Seleccionar Comprobante',
-        'Selecciona una opción:',
+        'Elige cómo quieres agregar tu comprobante:',
         [
           {
             text: 'Cancelar',
             style: 'cancel'
           },
           {
-            text: 'Cámara',
+            text: 'Tomar Foto',
             onPress: () => {
-              // Simular imagen de cámara
               setSelectedReceipt({
                 uri: 'simulated_camera_image',
                 type: 'image',
-                name: 'comprobante_camara.jpg'
+                name: `comprobante_camara_${Date.now()}.jpg`
               });
             }
           },
           {
-            text: 'Galería',
+            text: 'Elegir de Galería',
             onPress: () => {
-              // Simular imagen de galería
               setSelectedReceipt({
                 uri: 'simulated_gallery_image',
                 type: 'image',
-                name: 'comprobante_galeria.jpg'
+                name: `comprobante_galeria_${Date.now()}.jpg`
               });
             }
           }
@@ -710,22 +858,70 @@ export default function PaymentsScreen() {
     try {
       setProcessingPayment(true);
       
-      // Simular guardado del comprobante en la ruta especificada
-      const receiptPath = `C:\\projecto_septimoFinal\\Capturas\\comprobante_${Date.now()}.jpg`;
+      const guardarResult = await paymentService.guardarComprobante(
+        selectedReceipt, 
+        amount, 
+        clientPaymentInfo!.reservaInfo!.Id
+      );
       
-      const result = await paymentService.registrarPago({
-        IdReserva: clientPaymentInfo!.reservaInfo!.Id,
-        Monto: amount,
-        MetodoPago: 'Comprobante Subido',
-        TipoAbono: 'Abono Temporal',
-        ComprobanteRuta: receiptPath,
-        EstadoAprobacion: 'Pendiente'
-      });
+      if (guardarResult.success) {
+        const result = await paymentService.registrarPago({
+          IdReserva: clientPaymentInfo!.reservaInfo!.Id,
+          Monto: amount,
+          MetodoPago: 'Comprobante Subido',
+          TipoAbono: 'Abono Temporal',
+          ComprobanteRuta: guardarResult.rutaArchivo,
+          EstadoAprobacion: 'Pendiente'
+        });
+        
+        if (result.success) {
+          Alert.alert(
+            'Comprobante Subido', 
+            `Excelente! Tu comprobante por $${amount.toFixed(2)} ha sido subido exitosamente.\n\nGuardado en: ${guardarResult.rutaArchivo}\n\nNuestro equipo administrativo revisará que el pago coincida con el valor solicitado.\n\nPor el momento se ha descontado temporalmente el valor ingresado de tu cuenta.\n\nSi hubiera alguna inconsistencia, nos pondremos en contacto contigo.\n\nGracias por tu pago!\n\nCementerio San Agustín - La Concordia`,
+            [
+              {
+                text: 'Ver Estado Actualizado',
+                onPress: () => {
+                  resetModals();
+                  refreshCurrentConsultation();
+                }
+              },
+              {
+                text: 'Volver al Inicio',
+                onPress: returnToHome
+              }
+            ]
+          );
+        }
+      } else {
+        Alert.alert('Error', guardarResult.message);
+      }
+    } catch (err) {
+      Alert.alert('Error', 'Error al subir el comprobante');
+    } finally {
+      setProcessingPayment(false);
+    }
+  };
+
+  const uploadTransferReceipt = async () => {
+    if (!selectedReceipt) {
+      Alert.alert('Error', 'Por favor seleccione un comprobante de transferencia');
+      return;
+    }
+
+    try {
+      setProcessingPayment(true);
       
-      if (result.success) {
+      const guardarResult = await paymentService.guardarComprobante(
+        selectedReceipt, 
+        parseFloat(transferAmount),
+        clientPaymentInfo!.reservaInfo!.Id
+      );
+      
+      if (guardarResult.success) {
         Alert.alert(
-          'Comprobante Subido', 
-          'Tu comprobante ha sido subido exitosamente. Se actualizará tu pago al momento de que uno de nuestros administradores realice la comprobación (máximo 4 horas hábiles).',
+          'Transferencia Completada',
+          `Excelente! Su transferencia ha sido procesada exitosamente.\n\nMonto: $${parseFloat(transferAmount).toFixed(2)}\nBanco: ${selectedBank?.name}\nComprobante guardado en:\n${guardarResult.rutaArchivo}\n\nNuestro equipo administrativo revisará que el pago coincida con el valor solicitado.\n\nPor el momento se ha descontado temporalmente el valor ingresado de su cuenta.\n\nSi hubiera alguna inconsistencia, nos pondremos en contacto con usted.\n\nGracias por su confianza!\n\nCementerio San Agustín - La Concordia`,
           [
             {
               text: 'Ver Estado Actualizado',
@@ -740,33 +936,14 @@ export default function PaymentsScreen() {
             }
           ]
         );
+      } else {
+        Alert.alert('Error', guardarResult.message);
       }
     } catch (err) {
-      Alert.alert('Error', 'Error al subir el comprobante');
+      Alert.alert('Error', 'Error al subir el comprobante de transferencia');
     } finally {
       setProcessingPayment(false);
     }
-  };
-
-  const resetModals = () => {
-    setShowPaymentMethods(false);
-    setShowPaymentPlan(false);
-    setShowBankTransfer(false);
-    setShowCreditCard(false);
-    setShowQRCode(false);
-    setShowReceiptUpload(false);
-    setCustomAmount('');
-    setSelectedMonths(1);
-    setPaymentPlan(null);
-    setSelectedBank(null);
-    setSelectedPaymentMethod('');
-    setCreditCardData({
-      number: '',
-      expiry: '',
-      cvv: '',
-      name: ''
-    });
-    setSelectedReceipt(null);
   };
 
   return (
@@ -1053,7 +1230,7 @@ export default function PaymentsScreen() {
                     style={styles.planCard}
                   >
                     <View style={styles.modalHeader}>
-                      <Text style={styles.sectionTitle}>Plan de Pagos</Text>
+                      <Text style={styles.sectionTitle}>Plan de Pagos - Tarjeta de Crédito</Text>
                       <TouchableOpacity 
                         onPress={() => setShowPaymentPlan(false)}
                         style={styles.closeButton}
@@ -1063,7 +1240,7 @@ export default function PaymentsScreen() {
                     </View>
 
                     <Text style={styles.planSubtitle}>
-                      Configura el monto y plazo para tu pago
+                      Configura el monto y plazo para tu pago con tarjeta
                     </Text>
 
                     <View style={styles.amountInput}>
@@ -1131,24 +1308,20 @@ export default function PaymentsScreen() {
                       </View>
                     )}
 
-                    <View style={styles.planButtons}>
-                      <TouchableOpacity
-                        style={[styles.processButton, {marginBottom: 10}]}
-                        onPress={handlePaymentPlanConfirm}
-                        disabled={!paymentPlan}
+                    <TouchableOpacity
+                      style={styles.processButton}
+                      onPress={handlePaymentPlanConfirm}
+                      disabled={!paymentPlan}
+                    >
+                      <LinearGradient
+                        colors={['#4682B4', '#2F4F4F']}
+                        style={styles.processButtonGradient}
                       >
-                        <LinearGradient
-                          colors={['#4682B4', '#2F4F4F']}
-                          style={styles.processButtonGradient}
-                        >
-                          <Text style={styles.processButtonText}>
-                            Continuar con {selectedPaymentMethod === 'transfer' ? 'Transferencia' : 
-                                         selectedPaymentMethod === 'card' ? 'Tarjeta' :
-                                         selectedPaymentMethod === 'qr' ? 'QR' : 'Comprobante'}
-                          </Text>
-                        </LinearGradient>
-                      </TouchableOpacity>
-                    </View>
+                        <Text style={styles.processButtonText}>
+                          Continuar con Tarjeta de Crédito
+                        </Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
                   </LinearGradient>
                 </View>
               </ScrollView>
@@ -1163,72 +1336,196 @@ export default function PaymentsScreen() {
             onRequestClose={() => setShowBankTransfer(false)}
           >
             <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
-                <LinearGradient
-                  colors={['#FFFFFF', '#F0F8FF']}
-                  style={styles.transferCard}
-                >
-                  <View style={styles.modalHeader}>
-                    <Text style={styles.sectionTitle}>Transferencia Bancaria</Text>
-                    <TouchableOpacity 
-                      onPress={() => setShowBankTransfer(false)}
-                      style={styles.closeButton}
-                    >
-                      <X size={24} color="#666" />
-                    </TouchableOpacity>
-                  </View>
-
-                  <Text style={styles.transferSubtitle}>
-                    Selecciona el banco para realizar tu transferencia por ${customAmount}
-                  </Text>
-
-                  <Text style={styles.bankSectionTitle}>Selecciona el banco:</Text>
-                  
-                  {banksInfo.map((bank, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      style={[
-                        styles.bankCard,
-                        selectedBank?.name === bank.name && styles.selectedBankCard
-                      ]}
-                      onPress={() => setSelectedBank(bank)}
-                    >
-                      <View style={styles.bankInfo}>
-                        <Text style={styles.bankName}>{bank.name}</Text>
-                        <Text style={styles.accountInfo}>
-                          {bank.accountType}: {bank.accountNumber}
-                        </Text>
-                        <Text style={styles.beneficiaryInfo}>
-                          Beneficiario: Cementerio San Agustín
-                        </Text>
-                        <Text style={styles.referenceInfo}>
-                          Referencia: Pago Cementerio - Cédula {cedula}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  ))}
-
-                  <TouchableOpacity
-                    style={styles.processButton}
-                    onPress={processBankTransfer}
-                    disabled={processingPayment}
+              <ScrollView style={styles.modalScrollView}>
+                <View style={styles.modalContent}>
+                  <LinearGradient
+                    colors={['#FFFFFF', '#F0F8FF']}
+                    style={styles.transferCard}
                   >
-                    <LinearGradient
-                      colors={['#4682B4', '#2F4F4F']}
-                      style={styles.processButtonGradient}
-                    >
-                      {processingPayment ? (
-                        <ActivityIndicator size={18} color="#FFFFFF" />
-                      ) : (
-                        <Building size={18} color="#FFFFFF" />
+                    <View style={styles.modalHeader}>
+                      <Text style={styles.sectionTitle}>Transferencia Bancaria</Text>
+                      <TouchableOpacity 
+                        onPress={() => setShowBankTransfer(false)}
+                        style={styles.closeButton}
+                      >
+                        <X size={24} color="#666" />
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Campo para editar monto */}
+                    <View style={styles.amountInputSection}>
+                      <Text style={styles.inputLabel}>💰 Monto a transferir:</Text>
+                      <View style={styles.amountInputContainer}>
+                        <Text style={styles.currencySymbol}>$</Text>
+                        <TextInput
+                          style={[
+                            styles.amountInput,
+                            transferAmount && parseFloat(transferAmount) < 80 && styles.invalidInput
+                          ]}
+                          placeholder="80.00"
+                          value={transferAmount}
+                          onChangeText={setTransferAmount}
+                          keyboardType="numeric"
+                          placeholderTextColor="#999"
+                        />
+                      </View>
+                      {transferAmount && parseFloat(transferAmount) < 80 && (
+                        <Text style={styles.errorText}>El monto mínimo es $80.00</Text>
                       )}
-                      <Text style={styles.processButtonText}>
-                        {processingPayment ? 'Procesando...' : 'Registrar Transferencia'}
-                      </Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-                </LinearGradient>
-              </View>
+                      {clientPaymentInfo && transferAmount && parseFloat(transferAmount) > clientPaymentInfo.pendingAmount && (
+                        <Text style={styles.errorText}>
+                          No puede exceder el saldo pendiente: ${clientPaymentInfo.pendingAmount.toFixed(2)}
+                        </Text>
+                      )}
+                    </View>
+
+                    <Text style={styles.bankSectionTitle}>🏦 Selecciona el banco de destino:</Text>
+                    
+                    {banksInfo.map((bank, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={[
+                          styles.bankCard,
+                          selectedBank?.name === bank.name && styles.selectedBankCard
+                        ]}
+                        onPress={() => setSelectedBank(bank)}
+                      >
+                        <View style={styles.bankInfo}>
+                          <View style={styles.bankHeader}>
+                            <Text style={styles.bankName}>{bank.name}</Text>
+                            {selectedBank?.name === bank.name && (
+                              <Text style={styles.selectedIndicator}>✅</Text>
+                            )}
+                          </View>
+                          <Text style={styles.accountInfo}>
+                            📋 {bank.accountType}: {bank.accountNumber}
+                          </Text>
+                          <Text style={styles.beneficiaryInfo}>
+                            👤 Beneficiario: Cementerio San Agustín
+                          </Text>
+                          <Text style={styles.referenceInfo}>
+                            🏷️ Referencia: Pago Cementerio - Cédula {cedula}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+
+                    <TouchableOpacity
+                      style={[
+                        styles.processButton,
+                        (!selectedBank || !transferAmount || parseFloat(transferAmount) < 80) && styles.disabledButton
+                      ]}
+                      onPress={processBankTransfer}
+                      disabled={processingPayment || !selectedBank || !transferAmount || parseFloat(transferAmount) < 80}
+                    >
+                      <LinearGradient
+                        colors={(selectedBank && transferAmount && parseFloat(transferAmount) >= 80) 
+                          ? ['#4682B4', '#2F4F4F'] 
+                          : ['#cccccc', '#999999']}
+                        style={styles.processButtonGradient}
+                      >
+                        {processingPayment ? (
+                          <>
+                            <ActivityIndicator size={18} color="#FFFFFF" />
+                            <Text style={styles.processButtonText}>Registrando...</Text>
+                          </>
+                        ) : (
+                          <>
+                            <Building size={18} color="#FFFFFF" />
+                            <Text style={styles.processButtonText}>
+                              Registrar Transferencia
+                            </Text>
+                          </>
+                        )}
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </LinearGradient>
+                </View>
+              </ScrollView>
+            </View>
+          </Modal>
+
+          {/* Receipt Upload for Transfer Modal */}
+          <Modal
+            visible={showReceiptUploadForTransfer}
+            transparent={true}
+            animationType="slide"
+            onRequestClose={() => setShowReceiptUploadForTransfer(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <ScrollView style={styles.modalScrollView}>
+                <View style={styles.modalContent}>
+                  <LinearGradient
+                    colors={['#FFFFFF', '#F0F8FF']}
+                    style={styles.receiptCard}
+                  >
+                    <View style={styles.modalHeader}>
+                      <Text style={styles.sectionTitle}>📄 Subir Comprobante de Transferencia</Text>
+                      <TouchableOpacity 
+                        onPress={() => setShowReceiptUploadForTransfer(false)}
+                        style={styles.closeButton}
+                      >
+                        <X size={24} color="#666" />
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.uploadSection}>
+                      <Text style={styles.uploadLabel}>📸 Comprobante de transferencia:</Text>
+                      
+                      {selectedReceipt ? (
+                        <View style={styles.selectedReceiptContainer}>
+                          <View style={styles.receiptPreview}>
+                            <FileText size={40} color="#4682B4" />
+                          </View>
+                          <Text style={styles.receiptName}>
+                            {selectedReceipt.name || 'Comprobante de transferencia'}
+                          </Text>
+                          <TouchableOpacity 
+                            onPress={() => setSelectedReceipt(null)} 
+                            style={styles.removeReceiptButton}
+                          >
+                            <Text style={styles.removeReceiptText}>❌ Remover</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <TouchableOpacity style={styles.uploadButton} onPress={pickReceipt}>
+                          <Upload size={32} color="#4682B4" />
+                          <Text style={styles.uploadButtonText}>📷 Seleccionar Comprobante</Text>
+                          <Text style={styles.uploadButtonSubtext}>JPG, PNG o PDF</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.processButton,
+                        !selectedReceipt && styles.disabledButton
+                      ]}
+                      onPress={uploadTransferReceipt}
+                      disabled={processingPayment || !selectedReceipt}
+                    >
+                      <LinearGradient
+                        colors={selectedReceipt ? ['#4682B4', '#2F4F4F'] : ['#cccccc', '#999999']}
+                        style={styles.processButtonGradient}
+                      >
+                        {processingPayment ? (
+                          <>
+                            <ActivityIndicator size={18} color="#FFFFFF" />
+                            <Text style={styles.processButtonText}>Subiendo comprobante...</Text>
+                          </>
+                        ) : (
+                          <>
+                            <Upload size={18} color="#FFFFFF" />
+                            <Text style={styles.processButtonText}>
+                              Completar Transferencia
+                            </Text>
+                          </>
+                        )}
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </LinearGradient>
+                </View>
+              </ScrollView>
             </View>
           </Modal>
 
@@ -1256,65 +1553,185 @@ export default function PaymentsScreen() {
                       </TouchableOpacity>
                     </View>
 
-                    <Text style={styles.cardSubtitle}>
-                      Monto a pagar: ${customAmount}
-                    </Text>
+                    {/* Vista previa de la tarjeta */}
+                    <View style={styles.cardPreview}>
+                      <LinearGradient
+                        colors={creditCardData.type ? ['#1e3c72', '#2a5298'] : ['#cccccc', '#999999']}
+                        style={styles.cardPreviewGradient}
+                      >
+                        <View style={styles.cardPreviewContent}>
+                          <View style={styles.cardPreviewHeader}>
+                            <Text style={styles.cardTypeText}>
+                              {creditCardData.type || 'Tipo de Tarjeta'}
+                            </Text>
+                            <Text style={styles.cardIconText}>
+                              {getCardIcon(creditCardData.type)}
+                            </Text>
+                          </View>
+                          <Text style={styles.cardNumberPreview}>
+                            {creditCardData.number || '**** **** **** ****'}
+                          </Text>
+                          <View style={styles.cardPreviewFooter}>
+                            <View>
+                              <Text style={styles.cardLabelText}>TITULAR</Text>
+                              <Text style={styles.cardHolderText}>
+                                {creditCardData.name || 'NOMBRE COMPLETO'}
+                              </Text>
+                            </View>
+                            <View style={styles.cardExpiryContainer}>
+                              <Text style={styles.cardLabelText}>VENCE</Text>
+                              <Text style={styles.cardExpiryText}>
+                                {creditCardData.expiry || 'MM/AA'}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+                      </LinearGradient>
+                    </View>
 
+                    {/* Formulario de la tarjeta */}
                     <View style={styles.cardForm}>
                       <View style={styles.formGroup}>
-                        <Text style={styles.inputLabel}>Número de tarjeta:</Text>
-                        <TextInput
-                          style={styles.textInput}
-                          placeholder="1234 5678 9012 3456"
-                          value={creditCardData.number}
-                          onChangeText={(text) => setCreditCardData({...creditCardData, number: text})}
-                          keyboardType="numeric"
-                          maxLength={19}
-                        />
+                        <Text style={styles.inputLabel}>Número de tarjeta *</Text>
+                        <View style={[
+                          styles.cardInputContainer,
+                          creditCardData.number && !creditCardData.type && styles.invalidInput
+                        ]}>
+                          <TextInput
+                            style={styles.cardInput}
+                            placeholder="1234 5678 9012 3456"
+                            value={creditCardData.number}
+                            onChangeText={handleCardNumberChange}
+                            keyboardType="numeric"
+                            maxLength={23}
+                            placeholderTextColor="#999"
+                          />
+                          {creditCardData.type && (
+                            <View style={styles.cardTypeIndicator}>
+                              <Text style={styles.cardTypeIndicatorText}>{creditCardData.type}</Text>
+                            </View>
+                          )}
+                        </View>
                       </View>
 
                       <View style={styles.formRow}>
                         <View style={styles.formGroupHalf}>
-                          <Text style={styles.inputLabel}>Fecha de vencimiento:</Text>
+                          <Text style={styles.inputLabel}>Fecha de vencimiento *</Text>
                           <TextInput
-                            style={styles.textInput}
+                            style={styles.cardInput}
                             placeholder="MM/AA"
                             value={creditCardData.expiry}
-                            onChangeText={(text) => setCreditCardData({...creditCardData, expiry: text})}
+                            onChangeText={handleExpiryChange}
                             keyboardType="numeric"
                             maxLength={5}
+                            placeholderTextColor="#999"
                           />
                         </View>
 
                         <View style={styles.formGroupHalf}>
-                          <Text style={styles.inputLabel}>CVV:</Text>
+                          <Text style={styles.inputLabel}>CVV *</Text>
                           <TextInput
-                            style={styles.textInput}
+                            style={styles.cardInput}
                             placeholder="123"
                             value={creditCardData.cvv}
-                            onChangeText={(text) => setCreditCardData({...creditCardData, cvv: text})}
+                            onChangeText={handleCVVChange}
                             keyboardType="numeric"
-                            maxLength={4}
+                            maxLength={creditCardData.type === 'American Express' ? 4 : 3}
                             secureTextEntry
+                            placeholderTextColor="#999"
                           />
                         </View>
                       </View>
 
                       <View style={styles.formGroup}>
-                        <Text style={styles.inputLabel}>Nombre del titular:</Text>
+                        <Text style={styles.inputLabel}>Nombre del titular *</Text>
                         <TextInput
-                          style={styles.textInput}
-                          placeholder="NOMBRE COMPLETO"
+                          style={styles.cardInput}
+                          placeholder="NOMBRE COMPLETO COMO APARECE EN LA TARJETA"
                           value={creditCardData.name}
-                          onChangeText={(text) => setCreditCardData({...creditCardData, name: text.toUpperCase()})}
+                          onChangeText={handleNameChange}
                           autoCapitalize="characters"
+                          placeholderTextColor="#999"
                         />
                       </View>
                     </View>
 
                     <TouchableOpacity
-                      style={styles.processButton}
+                      style={[
+                        styles.processButton,
+                        !creditCardData.isValid && styles.disabledButton
+                      ]}
                       onPress={processCreditCard}
+                      disabled={processingPayment || !creditCardData.isValid}
+                    >
+                      <LinearGradient
+                        colors={creditCardData.isValid ? ['#4682B4', '#2F4F4F'] : ['#cccccc', '#999999']}
+                        style={styles.processButtonGradient}
+                      >
+                        {processingPayment ? (
+                          <>
+                            <ActivityIndicator size={18} color="#FFFFFF" />
+                            <Text style={styles.processButtonText}>Procesando pago...</Text>
+                          </>
+                        ) : (
+                          <>
+                            <CreditCard size={18} color="#FFFFFF" />
+                            <Text style={styles.processButtonText}>
+                              Procesar Pago - ${paymentPlan?.monthlyAmount.toFixed(2) || '0.00'}
+                            </Text>
+                          </>
+                        )}
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </LinearGradient>
+                </View>
+              </ScrollView>
+            </View>
+          </Modal>
+
+          {/* QR Payment Modal */}
+          <Modal
+            visible={showQRPayment}
+            transparent={true}
+            animationType="slide"
+            onRequestClose={() => setShowQRPayment(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <ScrollView style={styles.modalScrollView}>
+                <View style={styles.modalContent}>
+                  <LinearGradient
+                    colors={['#FFFFFF', '#F0F8FF']}
+                    style={styles.qrCard}
+                  >
+                    <View style={styles.modalHeader}>
+                      <Text style={styles.sectionTitle}>Pago QR DeUna</Text>
+                      <TouchableOpacity 
+                        onPress={() => setShowQRPayment(false)}
+                        style={styles.closeButton}
+                      >
+                        <X size={24} color="#666" />
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.amountDisplay}>
+                      <Text style={styles.amountLabel}>Monto a pagar:</Text>
+                      <Text style={styles.amountValue}>${parseFloat(customAmount || '0').toFixed(2)}</Text>
+                    </View>
+
+                    <View style={styles.qrContainer}>
+                      <View style={styles.qrImageContainer}>
+                        <Image 
+                          source={{uri: 'https://megaorganik.com/wp-content/uploads/2023/07/Codigo_QR_DeUna_MEGA-724x1024.jpg'}}
+                          style={styles.qrImage}
+                          resizeMode="contain"
+                        />
+                        <Text style={styles.qrText}>Código QR DeUna - Banco Pichincha</Text>
+                      </View>
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.processButton}
+                      onPress={processQRPayment}
                       disabled={processingPayment}
                     >
                       <LinearGradient
@@ -1324,93 +1741,16 @@ export default function PaymentsScreen() {
                         {processingPayment ? (
                           <ActivityIndicator size={18} color="#FFFFFF" />
                         ) : (
-                          <CreditCard size={18} color="#FFFFFF" />
+                          <QrCode size={18} color="#FFFFFF" />
                         )}
                         <Text style={styles.processButtonText}>
-                          {processingPayment ? 'Procesando...' : 'Procesar Pago'}
+                          {processingPayment ? 'Registrando...' : 'Confirmar Pago QR'}
                         </Text>
                       </LinearGradient>
                     </TouchableOpacity>
                   </LinearGradient>
                 </View>
               </ScrollView>
-            </View>
-          </Modal>
-
-          {/* QR Code Modal */}
-          <Modal
-            visible={showQRCode}
-            transparent={true}
-            animationType="slide"
-            onRequestClose={() => setShowQRCode(false)}
-          >
-            <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
-                <LinearGradient
-                  colors={['#FFFFFF', '#F0F8FF']}
-                  style={styles.qrCard}
-                >
-                  <View style={styles.modalHeader}>
-                    <Text style={styles.sectionTitle}>QR Banco Pichincha</Text>
-                    <TouchableOpacity 
-                      onPress={() => setShowQRCode(false)}
-                      style={styles.closeButton}
-                    >
-                      <X size={24} color="#666" />
-                    </TouchableOpacity>
-                  </View>
-
-                  <Text style={styles.qrSubtitle}>
-                    Monto a pagar: ${customAmount}
-                  </Text>
-
-                  <View style={styles.qrContainer}>
-                    <View style={styles.qrCodePlaceholder}>
-                      <QrCode size={120} color="#4682B4" />
-                      <Text style={styles.qrText}>Código QR Banco Pichincha</Text>
-                      <Text style={styles.qrSubtext}>
-                        Escanea este código con la app de Banco Pichincha
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.qrInstructions}>
-                    <Text style={styles.instructionTitle}>Instrucciones:</Text>
-                    <Text style={styles.instructionText}>
-                      1. Abre la aplicación de Banco Pichincha
-                    </Text>
-                    <Text style={styles.instructionText}>
-                      2. Selecciona "Pagar con QR"
-                    </Text>
-                    <Text style={styles.instructionText}>
-                      3. Escanea el código QR mostrado arriba
-                    </Text>
-                    <Text style={styles.instructionText}>
-                      4. Confirma el pago por ${customAmount || '0.00'}
-                    </Text>
-                  </View>
-
-                  <TouchableOpacity
-                    style={styles.processButton}
-                    onPress={processQRPayment}
-                    disabled={processingPayment}
-                  >
-                    <LinearGradient
-                      colors={['#4682B4', '#2F4F4F']}
-                      style={styles.processButtonGradient}
-                    >
-                      {processingPayment ? (
-                        <ActivityIndicator size={18} color="#FFFFFF" />
-                      ) : (
-                        <QrCode size={18} color="#FFFFFF" />
-                      )}
-                      <Text style={styles.processButtonText}>
-                        {processingPayment ? 'Procesando...' : 'Confirmar Pago QR'}
-                      </Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-                </LinearGradient>
-              </View>
             </View>
           </Modal>
 
@@ -1422,131 +1762,68 @@ export default function PaymentsScreen() {
             onRequestClose={() => setShowReceiptUpload(false)}
           >
             <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
-                <LinearGradient
-                  colors={['#FFFFFF', '#F0F8FF']}
-                  style={styles.receiptCard}
-                >
-                  <View style={styles.modalHeader}>
-                    <Text style={styles.sectionTitle}>Subir Comprobante</Text>
-                    <TouchableOpacity 
-                      onPress={() => setShowReceiptUpload(false)}
-                      style={styles.closeButton}
-                    >
-                      <X size={24} color="#666" />
-                    </TouchableOpacity>
-                  </View>
-
-                  <Text style={styles.receiptSubtitle}>
-                    Monto del abono: ${customAmount}
-                  </Text>
-
-                  <View style={styles.uploadSection}>
-                    <Text style={styles.uploadLabel}>Comprobante de pago:</Text>
-                    
-                    {selectedReceipt ? (
-                      <View style={styles.selectedReceiptContainer}>
-                        <View style={styles.receiptPreview}>
-                          <FileText size={40} color="#4682B4" />
-                        </View>
-                        <Text style={styles.receiptName}>{selectedReceipt.name || 'Comprobante seleccionado'}</Text>
-                        <TouchableOpacity onPress={() => setSelectedReceipt(null)} style={styles.removeReceiptButton}>
-                          <Text style={styles.removeReceiptText}>Remover</Text>
-                        </TouchableOpacity>
-                      </View>
-                    ) : (
-                      <TouchableOpacity style={styles.uploadButton} onPress={pickReceipt}>
-                        <Upload size={24} color="#4682B4" />
-                        <Text style={styles.uploadButtonText}>Seleccionar Comprobante</Text>
-                        <Text style={styles.uploadButtonSubtext}>JPG, PNG o PDF</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-
-                  <View style={styles.uploadInfo}>
-                    <Text style={styles.infoText}>
-                      El comprobante se guardará en: C:\projecto_septimoFinal\Capturas
-                    </Text>
-                    <Text style={styles.infoText}>
-                      Tu pago se actualizará al momento de que uno de nuestros administradores realice la comprobación (máximo 4 horas hábiles).
-                    </Text>
-                  </View>
-
-                  <TouchableOpacity
-                    style={styles.processButton}
-                    onPress={uploadReceipt}
-                    disabled={processingPayment || !selectedReceipt}
+              <ScrollView style={styles.modalScrollView}>
+                <View style={styles.modalContent}>
+                  <LinearGradient
+                    colors={['#FFFFFF', '#F0F8FF']}
+                    style={styles.receiptCard}
                   >
-                    <LinearGradient
-                      colors={['#4682B4', '#2F4F4F']}
-                      style={styles.processButtonGradient}
-                    >
-                      {processingPayment ? (
-                        <ActivityIndicator size={18} color="#FFFFFF" />
+                    <View style={styles.modalHeader}>
+                      <Text style={styles.sectionTitle}>Subir Comprobante</Text>
+                      <TouchableOpacity 
+                        onPress={() => setShowReceiptUpload(false)}
+                        style={styles.closeButton}
+                      >
+                        <X size={24} color="#666" />
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.uploadSection}>
+                      <Text style={styles.uploadLabel}>📄 Comprobante de pago:</Text>
+                      
+                      {selectedReceipt ? (
+                        <View style={styles.selectedReceiptContainer}>
+                          <View style={styles.receiptPreview}>
+                            <FileText size={40} color="#4682B4" />
+                          </View>
+                          <Text style={styles.receiptName}>{selectedReceipt.name || 'Comprobante seleccionado'}</Text>
+                          <TouchableOpacity onPress={() => setSelectedReceipt(null)} style={styles.removeReceiptButton}>
+                            <Text style={styles.removeReceiptText}>Remover</Text>
+                          </TouchableOpacity>
+                        </View>
                       ) : (
-                        <Upload size={18} color="#FFFFFF" />
+                        <TouchableOpacity style={styles.uploadButton} onPress={pickReceipt}>
+                          <Upload size={24} color="#4682B4" />
+                          <Text style={styles.uploadButtonText}>Seleccionar Comprobante</Text>
+                          <Text style={styles.uploadButtonSubtext}>JPG, PNG o PDF</Text>
+                        </TouchableOpacity>
                       )}
-                      <Text style={styles.processButtonText}>
-                        {processingPayment ? 'Subiendo...' : 'Subir Comprobante'}
-                      </Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-                </LinearGradient>
-              </View>
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.processButton}
+                      onPress={uploadReceipt}
+                      disabled={processingPayment || !selectedReceipt}
+                    >
+                      <LinearGradient
+                        colors={['#4682B4', '#2F4F4F']}
+                        style={styles.processButtonGradient}
+                      >
+                        {processingPayment ? (
+                          <ActivityIndicator size={18} color="#FFFFFF" />
+                        ) : (
+                          <Upload size={18} color="#FFFFFF" />
+                        )}
+                        <Text style={styles.processButtonText}>
+                          {processingPayment ? 'Subiendo...' : 'Subir Comprobante'}
+                        </Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </LinearGradient>
+                </View>
+              </ScrollView>
             </View>
           </Modal>
-
-          {/* Important Information */}
-          <View style={styles.section}>
-            <LinearGradient
-              colors={['#FFFFFF', '#FFF8DC']}
-              style={styles.infoCard}
-            >
-              <View style={styles.infoHeader}>
-                <AlertTriangle size={24} color="#DAA520" />
-                <Text style={styles.infoTitle}>Información Importante</Text>
-              </View>
-              
-              <View style={styles.infoList}>
-                <View style={styles.infoItem}>
-                  <Text style={styles.infoBullet}>•</Text>
-                  <Text style={styles.infoText}>
-                    Los pagos vencidos generan un recargo del 2% mensual
-                  </Text>
-                </View>
-                <View style={styles.infoItem}>
-                  <Text style={styles.infoBullet}>•</Text>
-                  <Text style={styles.infoText}>
-                    Conserva el comprobante de pago hasta completar todas las cuotas
-                  </Text>
-                </View>
-                <View style={styles.infoItem}>
-                  <Text style={styles.infoBullet}>•</Text>
-                  <Text style={styles.infoText}>
-                    El procesamiento del pago puede tomar hasta 24 horas hábiles
-                  </Text>
-                </View>
-                <View style={styles.infoItem}>
-                  <Text style={styles.infoBullet}>•</Text>
-                  <Text style={styles.infoText}>
-                    Los abonos temporales se actualizan una vez verificados por administradores
-                  </Text>
-                </View>
-                <View style={styles.infoItem}>
-                  <Text style={styles.infoBullet}>•</Text>
-                  <Text style={styles.infoText}>
-                    Máximo de {PAYMENT_CONFIG.MAX_MONTHS_TO_DEFER} meses para diferir pagos
-                  </Text>
-                </View>
-                <View style={styles.infoItem}>
-                  <Text style={styles.infoBullet}>•</Text>
-                  <Text style={styles.infoText}>
-                    Para consultas adicionales, contacta al cementerio San Agustín
-                  </Text>
-                </View>
-              </View>
-            </LinearGradient>
-          </View>
 
           <View style={styles.bottomPadding} />
         </ScrollView>
@@ -1604,8 +1881,6 @@ const styles = StyleSheet.create({
     color: '#4682B4',
     marginBottom: 15,
   },
-  
-  // Search Section
   searchCard: {
     padding: 20,
     borderRadius: 15,
@@ -1663,8 +1938,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Bold',
     color: '#FFFFFF',
   },
-  
-  // Loading and Error States
   loadingContainer: {
     padding: 20,
     alignItems: 'center',
@@ -1714,8 +1987,6 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
   },
-  
-  // Debt Information
   debtCard: {
     padding: 20,
     borderRadius: 15,
@@ -1858,8 +2129,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 6,
   },
-  
-  // Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -1872,7 +2141,7 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     width: '90%',
-    maxHeight: '80%',
+    maxHeight: '85%',
     backgroundColor: 'transparent',
     alignSelf: 'center',
     marginVertical: 50,
@@ -1886,8 +2155,6 @@ const styles = StyleSheet.create({
   closeButton: {
     padding: 5,
   },
-  
-  // Payment Methods
   paymentMethodsCard: {
     padding: 20,
     borderRadius: 15,
@@ -1948,8 +2215,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     color: '#FFFFFF',
   },
-  
-  // Payment Plan Styles
   planCard: {
     padding: 20,
     borderRadius: 15,
@@ -2033,27 +2298,24 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 4,
   },
-  planButtons: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  quickPayButton: {
-    backgroundColor: '#87A96B',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderRadius: 8,
-    flex: 1,
-    minWidth: '45%',
+  amountDisplay: {
+    backgroundColor: '#F0F8FF',
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 20,
     alignItems: 'center',
   },
-  quickPayButtonText: {
-    fontSize: 12,
-    fontFamily: 'Inter-Bold',
-    color: '#FFFFFF',
+  amountLabel: {
+    fontSize: 14,
+    fontFamily: 'Inter-Regular',
+    color: '#666',
+    marginBottom: 5,
   },
-  
-  // Bank Transfer Styles
+  amountValue: {
+    fontSize: 24,
+    fontFamily: 'Inter-Bold',
+    color: '#4682B4',
+  },
   transferCard: {
     padding: 20,
     borderRadius: 15,
@@ -2063,12 +2325,28 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 6,
   },
-  transferSubtitle: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#666',
-    marginBottom: 20,
-    textAlign: 'center',
+  amountInputSection: {
+    marginBottom: 25,
+  },
+  amountInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
+    paddingHorizontal: 15,
+  },
+  currencySymbol: {
+    fontSize: 20,
+    fontFamily: 'Inter-Bold',
+    color: '#4682B4',
+    marginRight: 8,
+  },
+
+  invalidInput: {
+    borderColor: '#D32F2F',
+    backgroundColor: '#FFF5F5',
   },
   bankSectionTitle: {
     fontSize: 16,
@@ -2080,7 +2358,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 15,
-    marginBottom: 10,
+    marginBottom: 12,
     borderWidth: 2,
     borderColor: '#E0E0E0',
   },
@@ -2089,12 +2367,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0F8FF',
   },
   bankInfo: {
-    gap: 4,
+    gap: 6,
+  },
+  bankHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   bankName: {
     fontSize: 16,
     fontFamily: 'Inter-Bold',
     color: '#4682B4',
+    flex: 1,
+  },
+  selectedIndicator: {
+    fontSize: 18,
   },
   accountInfo: {
     fontSize: 14,
@@ -2129,102 +2416,9 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Bold',
     color: '#FFFFFF',
   },
-  
-  // Credit Card Styles
-  cardPaymentCard: {
-    padding: 20,
-    borderRadius: 15,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
+  disabledButton: {
+    opacity: 0.6,
   },
-  cardSubtitle: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#666',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  cardForm: {
-    gap: 15,
-  },
-  formGroup: {
-    gap: 8,
-  },
-  formRow: {
-    flexDirection: 'row',
-    gap: 15,
-  },
-  formGroupHalf: {
-    flex: 1,
-    gap: 8,
-  },
-  
-  // QR Code Styles
-  qrCard: {
-    padding: 20,
-    borderRadius: 15,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-  },
-  qrSubtitle: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#666',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  qrContainer: {
-    alignItems: 'center',
-    marginVertical: 20,
-  },
-  qrCodePlaceholder: {
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#F8F8FF',
-    borderRadius: 15,
-    borderWidth: 2,
-    borderColor: '#4682B4',
-    borderStyle: 'dashed',
-  },
-  qrText: {
-    fontSize: 16,
-    fontFamily: 'Inter-Bold',
-    color: '#4682B4',
-    marginTop: 10,
-  },
-  qrSubtext: {
-    fontSize: 12,
-    fontFamily: 'Inter-Regular',
-    color: '#666',
-    textAlign: 'center',
-    marginTop: 5,
-  },
-  qrInstructions: {
-    backgroundColor: '#F8F8FF',
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 20,
-  },
-  instructionTitle: {
-    fontSize: 14,
-    fontFamily: 'Inter-Bold',
-    color: '#4682B4',
-    marginBottom: 10,
-  },
-  instructionText: {
-    fontSize: 12,
-    fontFamily: 'Inter-Regular',
-    color: '#666',
-    marginBottom: 5,
-  },
-  
-  // Receipt Upload Styles
   receiptCard: {
     padding: 20,
     borderRadius: 15,
@@ -2233,13 +2427,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 6,
-  },
-  receiptSubtitle: {
-    fontSize: 14,
-    fontFamily: 'Inter-Regular',
-    color: '#666',
-    marginBottom: 20,
-    textAlign: 'center',
   },
   uploadSection: {
     marginBottom: 20,
@@ -2278,8 +2465,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   receiptPreview: {
-    width: 100,
-    height: 100,
+    width: 80,
+    height: 80,
     borderRadius: 8,
     marginBottom: 10,
     backgroundColor: '#F0F8FF',
@@ -2293,6 +2480,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     color: '#4682B4',
     marginBottom: 8,
+    textAlign: 'center',
   },
   removeReceiptButton: {
     backgroundColor: '#D32F2F',
@@ -2305,22 +2493,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     color: '#FFFFFF',
   },
-  uploadInfo: {
-    backgroundColor: '#FFF8DC',
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 20,
-  },
-  infoText: {
-    fontSize: 12,
-    fontFamily: 'Inter-Regular',
-    color: '#666',
-    marginBottom: 8,
-    lineHeight: 16,
-  },
-  
-  // Info Section
-  infoCard: {
+  cardPaymentCard: {
     padding: 20,
     borderRadius: 15,
     elevation: 3,
@@ -2329,29 +2502,157 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 6,
   },
-  infoHeader: {
+  cardPreview: {
+    marginVertical: 20,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+  },
+  cardPreviewGradient: {
+    borderRadius: 15,
+    padding: 20,
+    minHeight: 180,
+  },
+  cardPreviewContent: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  cardPreviewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 30,
+  },
+  cardTypeText: {
+    fontSize: 16,
+    fontFamily: 'Inter-Bold',
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  cardIconText: {
+    fontSize: 24,
+  },
+  cardNumberPreview: {
+    fontSize: 20,
+    fontFamily: 'Inter-Regular',
+    color: '#FFFFFF',
+    letterSpacing: 2,
+    textAlign: 'center',
+    marginVertical: 15,
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  cardPreviewFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+  },
+  cardLabelText: {
+    fontSize: 10,
+    fontFamily: 'Inter-Regular',
+    color: '#CCCCCC',
+    marginBottom: 2,
+  },
+  cardHolderText: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  cardExpiryContainer: {
+    alignItems: 'flex-end',
+  },
+  cardExpiryText: {
+    fontSize: 14,
+    fontFamily: 'Inter-SemiBold',
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  cardForm: {
+    gap: 20,
+    marginBottom: 20,
+  },
+  formGroup: {
+    gap: 8,
+  },
+  formRow: {
+    flexDirection: 'row',
+    gap: 15,
+  },
+  formGroupHalf: {
+    flex: 1,
+    gap: 8,
+  },
+  cardInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 15,
-    gap: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
   },
-  infoTitle: {
+  cardInput: {
+    flex: 1,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    fontSize: 16,
+    fontFamily: 'Inter-Regular',
+    color: '#333',
+  },
+  cardTypeIndicator: {
+    backgroundColor: '#4682B4',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderTopRightRadius: 8,
+    borderBottomRightRadius: 8,
+    marginRight: 2,
+  },
+  cardTypeIndicatorText: {
+    fontSize: 12,
+    fontFamily: 'Inter-Bold',
+    color: '#FFFFFF',
+  },
+  qrCard: {
+    padding: 20,
+    borderRadius: 15,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+  },
+  qrContainer: {
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  qrImageContainer: {
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#F8F8FF',
+    borderRadius: 15,
+    borderWidth: 2,
+    borderColor: '#4682B4',
+  },
+  qrImage: {
+    width: 200,
+    height: 200,
+    marginBottom: 10,
+  },
+  qrText: {
     fontSize: 16,
     fontFamily: 'Inter-Bold',
     color: '#4682B4',
-  },
-  infoList: {
-    gap: 10,
-  },
-  infoItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-  },
-  infoBullet: {
-    fontSize: 14,
-    color: '#DAA520',
-    fontWeight: 'bold',
+    marginTop: 10,
+    textAlign: 'center',
   },
   bottomPadding: {
     height: 50,

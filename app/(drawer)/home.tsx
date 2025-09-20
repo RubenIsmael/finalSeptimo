@@ -11,7 +11,19 @@ import {
   Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Menu, Calendar, CreditCard, Search, Clock, MapPin, Phone } from 'lucide-react-native';
+import { 
+  Menu, 
+  Calendar, 
+  CreditCard, 
+  Search, 
+  Clock, 
+  MapPin, 
+  Phone, 
+  MessageCircle,
+  Heart,
+  Shield,
+  Users
+} from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { DrawerActions } from '@react-navigation/native';
 import { useNavigation } from '@react-navigation/native';
@@ -19,7 +31,6 @@ import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import ImageCarousel from '@/components/ImageCarousel';
 import FloatingChatBot from '@/components/FloatingChatBot';
-import ActionButton from '@/components/ActionButton';
 
 // Solo importar WebView en móvil
 let WebView: any = null;
@@ -135,25 +146,39 @@ export default function HomeScreen() {
     }
   };
 
-  // Configuración de botones de acción con ActionButton
-  const actionButtons = [
+  // Configuración de servicios modernos con diseño 2x2
+  const services = [
     {
       title: 'Reservas',
-      colors: ['#87A96B', '#5F7F3F'] as const,
-      icon: <Calendar size={22} color="#4682B4" />,
+      subtitle: 'Espacios de descanso',
+      icon: Calendar,
+      colors: ['#8B7355', '#6B5B47'],
       route: '/reservations',
+      description: 'Reserva de espacios'
     },
     {
       title: 'Pagos',
-      colors: ['#DAA520', '#B8860B'] as const,
-      icon: <CreditCard size={22} color="#4682B4" />,
+      subtitle: 'Gestión financiera',
+      icon: CreditCard,
+      colors: ['#9C8B6B', '#7D6B4F'],
       route: '/payments',
+      description: 'Consulta de pagos'
     },
     {
       title: 'Consultas',
-      colors: ['#4682B4', '#2F4F4F'] as const,
-      icon: <Search size={22} color="#4682B4" />,
+      subtitle: 'Información general',
+      icon: Search,
+      colors: ['#6B7B7B', '#4F5F5F'],
       route: '/consultations',
+      description: 'Búsquedas y consultas'
+    },
+    {
+      title: 'Contáctanos',
+      subtitle: 'Soporte y ayuda',
+      icon: MessageCircle,
+      colors: ['#7B8B7B', '#5F6F5F'],
+      route: '/contact',
+      description: 'Atención personalizada'
     },
   ];
 
@@ -162,6 +187,25 @@ export default function HomeScreen() {
     { day: 'Sábados', hours: '8:00 AM - 5:00 PM' },
     { day: 'Domingos', hours: '9:00 AM - 5:00 PM' },
     { day: 'Feriados', hours: '10:00 AM - 5:00 PM' },
+  ];
+
+  // Información de valores institucionales
+  const valuesInfo = [
+    {
+      icon: Heart,
+      title: 'Respeto',
+      description: 'Honramos la memoria de quienes descansan aquí'
+    },
+    {
+      icon: Shield,
+      title: 'Seguridad',
+      description: 'Protegemos el descanso eterno con vigilancia constante'
+    },
+    {
+      icon: Users,
+      title: 'Familia',
+      description: 'Acompañamos a las familias en momentos difíciles'
+    }
   ];
 
   // HTML para WebView (funciona en web y móvil)
@@ -201,7 +245,7 @@ export default function HomeScreen() {
           dangerouslySetInnerHTML={{
             __html: `
               <iframe 
-                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d10595.75149880489!2d-79.38854164621887!3d-0.007048294397032805!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x902aaaae9f05796f%3A0xf8934d42d2080719!2sCampo%20santo%20San%20Agust%C3%ADn!5e0!3m2!1ses-419!2sec!4v1757087693866!5m2!1ses-419!2sec"
+                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d10595.75149880489!2d-79.38854164621887!3d-0.007048294397032805!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x902aaaae9f05796f%3A0xf8934d42d2080719!2eCampo%20santo%20San%20Agust%C3%ADn!5e0!3m2!1ses-419!2sec!4v1757087693866!5m2!1ses-419!2sec"
                 style="width: 100%; height: 100%; border: 0;"
                 allowfullscreen=""
                 loading="lazy"
@@ -235,7 +279,7 @@ export default function HomeScreen() {
         onPress={abrirMapaNativo}
         activeOpacity={0.8}
       >
-        <MapPin size={40} color="#4682B4" />
+        <MapPin size={40} color="#8B7355" />
         <Text style={styles.mapFallbackText}>
           Toca para ver en Google Maps
         </Text>
@@ -254,13 +298,13 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <LinearGradient
-        colors={['#F5F5DC', '#FFFFFF']}
+        colors={['#F5F5DC', '#FAF9F6']}
         style={styles.gradient}
       >
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={openDrawer} style={styles.menuButton}>
-            <Menu size={28} color="#4682B4" />
+            <Menu size={28} color="#8B7355" />
           </TouchableOpacity>
           <View style={styles.headerTextContainer}>
             <Text style={styles.headerTitle}>Cementerio San Agustín</Text>
@@ -277,7 +321,7 @@ export default function HomeScreen() {
           {/* Cemetery Description */}
           <View style={styles.section}>
             <LinearGradient
-              colors={['#FFFFFF', '#F8F8FF']}
+              colors={['#FFFFFF', '#F8F8F5']}
               style={styles.descriptionCard}
             >
               <Text style={styles.sectionTitle}>Nuestro Cementerio</Text>
@@ -291,19 +335,54 @@ export default function HomeScreen() {
             </LinearGradient>
           </View>
 
-          {/* Action Buttons - Usando ActionButton component */}
+          {/* Valores Institucionales */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Nuestros Valores</Text>
+            <View style={styles.valuesContainer}>
+              {valuesInfo.map((value, index) => (
+                <View key={index} style={styles.valueCard}>
+                  <LinearGradient
+                    colors={['#FFFFFF', '#F5F5F0']}
+                    style={styles.valueGradient}
+                  >
+                    <View style={styles.valueIconContainer}>
+                      <value.icon size={24} color="#8B7355" />
+                    </View>
+                    <Text style={styles.valueTitle}>{value.title}</Text>
+                    <Text style={styles.valueDescription}>{value.description}</Text>
+                  </LinearGradient>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {/* Modern Services Grid 2x2 */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Servicios Disponibles</Text>
-            <View style={styles.actionButtonsContainer}>
-              {actionButtons.map((button, index) => (
-                <ActionButton
-                  key={index}
-                  title={button.title}
-                  colors={button.colors}
-                  icon={button.icon}
-                  onPress={() => router.push(button.route as any)}
-                  style={styles.actionButtonStyle}
-                />
+            <View style={styles.servicesGrid}>
+              {services.map((service, index) => (
+                <TouchableOpacity 
+                  key={index} 
+                  style={styles.serviceCard} 
+                  onPress={() => router.push(service.route as any)}
+                  activeOpacity={0.8}
+                >
+                  <LinearGradient
+                    colors={[`${service.colors[0]}15`, `${service.colors[1]}08`]}
+                    style={styles.serviceGradient}
+                  >
+                    <View style={styles.servicePattern} />
+                    <View style={styles.serviceContent}>
+                      <View style={[styles.serviceIconContainer, { backgroundColor: service.colors[0] }]}>
+                        <service.icon size={22} color="#FFFFFF" />
+                      </View>
+                      <Text style={styles.serviceTitle}>{service.title}</Text>
+                      <Text style={styles.serviceSubtitle}>{service.subtitle}</Text>
+                      <Text style={styles.serviceDescription}>{service.description}</Text>
+                    </View>
+                    <View style={[styles.serviceAccent, { backgroundColor: service.colors[0] }]} />
+                  </LinearGradient>
+                </TouchableOpacity>
               ))}
             </View>
           </View>
@@ -311,11 +390,11 @@ export default function HomeScreen() {
           {/* Schedule */}
           <View style={styles.section}>
             <LinearGradient
-              colors={['#FFFFFF', '#F0F8FF']}
+              colors={['#FFFFFF', '#F0F8F5']}
               style={styles.scheduleCard}
             >
               <View style={styles.scheduleHeader}>
-                <Clock size={24} color="#4682B4" />
+                <Clock size={24} color="#8B7355" />
                 <Text style={styles.sectionTitle}>Horarios de Atención</Text>
               </View>
               {scheduleInfo.map((item, index) => (
@@ -330,7 +409,7 @@ export default function HomeScreen() {
           {/* Contact Information CON MAPA */}
           <View style={styles.section}>
             <LinearGradient
-              colors={['#87CEEB', '#F5F5DC']}
+              colors={['#E8E5E0', '#F5F5DC']}
               style={styles.contactCard}
             >
               <Text style={styles.contactTitle}>Información de Contacto</Text>
@@ -354,9 +433,9 @@ export default function HomeScreen() {
                 onPress={abrirMapaNativo}
                 activeOpacity={0.7}
               >
-                <MapPin size={20} color="#4682B4" />
+                <MapPin size={20} color="#8B7355" />
                 <Text style={styles.contactText}>La Concordia, Santo Domingo, Ecuador</Text>
-                <Text style={styles.tapHint}>📍 Toca para navegar</Text>
+                <Text style={styles.tapHint}>Toca para navegar</Text>
               </TouchableOpacity>
               
               {/* Botón de WhatsApp mejorado */}
@@ -397,13 +476,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 15,
-    backgroundColor: 'rgba(255,255,255,0.9)',
+    backgroundColor: 'rgba(255,255,255,0.95)',
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: '#E5E2DB',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   menuButton: {
-    padding: 5,
+    padding: 8,
     marginRight: 15,
+    borderRadius: 8,
+    backgroundColor: '#F5F5F0',
   },
   headerTextContainer: {
     flex: 1,
@@ -411,13 +497,13 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 24,
     fontFamily: 'TituloPrincipal',
-    color: '#4682B4',
+    color: '#8B7355',
     fontWeight: 'bold',
   },
   headerSubtitle: {
     fontSize: 16,
     fontFamily: 'TextoGeneral',
-    color: '#666',
+    color: '#9C8B6B',
   },
   content: {
     flex: 1,
@@ -427,47 +513,175 @@ const styles = StyleSheet.create({
     marginVertical: 15,
   },
   descriptionCard: {
-    padding: 20,
-    borderRadius: 15,
-    elevation: 3,
+    padding: 24,
+    borderRadius: 16,
+    elevation: 4,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 6,
+    shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: '#F0ECE6',
   },
   sectionTitle: {
     fontSize: 22,
-    fontFamily: 'Texto_General',
-    color: '#4682B4',
-    marginBottom: 10,
+    fontFamily: 'Titulos',
+    color: '#8B7355',
+    marginBottom: 12,
     fontWeight: 'bold',
   },
   description: {
     fontSize: 16,
     fontFamily: 'TextoGeneral',
-    color: '#666',
+    color: '#6B5B47',
     lineHeight: 24,
     textAlign: 'justify',
   },
   
-  // ===== ESTILOS PARA ACTION BUTTONS =====
-  actionButtonsContainer: {
-    gap: 15,
-    marginVertical: 10,
+  // ===== ESTILOS PARA VALORES =====
+  valuesContainer: {
+    gap: 12,
   },
-  actionButtonStyle: {
-    width: '100%',
+  valueCard: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+  },
+  valueGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  valueIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+    backgroundColor: '#8B735520',
+  },
+  valueTitle: {
+    fontSize: 16,
+    fontFamily: 'Titulos',
+    color: '#8B7355',
+    fontWeight: '600',
+    marginBottom: 4,
+    flex: 1,
+  },
+  valueDescription: {
+    fontSize: 13,
+    fontFamily: 'TextoGeneral',
+    color: '#9C8B6B',
+    lineHeight: 18,
+    flex: 2,
+  },
+
+  // ===== ESTILOS PARA SERVICIOS GRID 2x2 =====
+  servicesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    justifyContent: 'space-between',
+  },
+  serviceCard: {
+    width: '48%',
+    height: 180,
+    borderRadius: 16,
+    overflow: 'hidden',
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+  },
+  serviceGradient: {
+    flex: 1,
+    position: 'relative',
+  },
+  servicePattern: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.08,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#8B7355',
+    borderStyle: 'dashed',
+    margin: 8,
+    borderRadius: 12,
+  },
+  serviceContent: {
+    flex: 1,
+    padding: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2,
+  },
+  serviceAccent: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 4,
+    opacity: 0.8,
+  },
+  serviceIconContainer: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+  },
+  serviceTitle: {
+    fontSize: 14,
+    fontFamily: 'Titulos',
+    color: '#3D3427',
+    marginBottom: 2,
+    textAlign: 'center',
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  serviceSubtitle: {
+    fontSize: 11,
+    fontFamily: 'TextoGeneral',
+    color: '#6B5B47',
+    textAlign: 'center',
+    marginBottom: 4,
+    fontWeight: '500',
+  },
+  serviceDescription: {
+    fontSize: 10,
+    fontFamily: 'TextoGeneral',
+    color: '#8B7355',
+    textAlign: 'center',
+    lineHeight: 14,
+    fontStyle: 'italic',
   },
   
   // Estilos de horarios
   scheduleCard: {
     padding: 20,
-    borderRadius: 15,
-    elevation: 3,
+    borderRadius: 16,
+    elevation: 4,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 6,
+    shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E8F5E8',
   },
   scheduleHeader: {
     flexDirection: 'row',
@@ -479,34 +693,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: '#E8F5E8',
   },
   scheduleDay: {
     fontSize: 16,
     fontFamily: 'TextoGeneral',
-    color: '#333',
+    color: '#4F5F4F',
     fontWeight: '600',
   },
   scheduleHours: {
     fontSize: 15,
     fontFamily: 'Titulos',
-    color: '#666',
+    color: '#6B7B6B',
   },
   contactCard: {
     padding: 20,
-    borderRadius: 15,
-    elevation: 3,
+    borderRadius: 16,
+    elevation: 4,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 6,
+    shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E0DDD6',
   },
   contactTitle: {
-    fontSize: 28,
+    fontSize: 24,
     fontFamily: 'Titulos',
-    color: '#000000',
+    color: '#5D4E37',
     marginBottom: 15,
     textAlign: 'center',
     fontWeight: 'bold',
@@ -520,13 +736,13 @@ const styles = StyleSheet.create({
   contactText: {
     fontSize: 16,
     fontFamily: 'TextoGeneral',
-    color: '#4682B4',
+    color: '#8B7355',
     flex: 1,
   },
   tapHint: {
     fontSize: 12,
     fontFamily: 'TextoGeneral',
-    color: '#4682B4',
+    color: '#8B7355',
     fontStyle: 'italic',
   },
   bottomPadding: {
@@ -537,9 +753,11 @@ const styles = StyleSheet.create({
   mapContainer: {
     height: 200,
     marginVertical: 15,
-    borderRadius: 10,
+    borderRadius: 12,
     overflow: 'hidden',
     position: 'relative',
+    borderWidth: 2,
+    borderColor: '#D2C5B0',
   },
   webView: {
     flex: 1,
@@ -548,13 +766,13 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F0F8FF',
+    backgroundColor: '#F5F5F0',
     borderRadius: 10,
   },
   mapFallbackText: {
     marginTop: 10,
     fontSize: 18,
-    color: '#4682B4',
+    color: '#8B7355',
     textAlign: 'center',
     fontFamily: 'Titulos',
     fontWeight: '600',
@@ -562,7 +780,7 @@ const styles = StyleSheet.create({
   mapFallbackSubtext: {
     marginTop: 5,
     fontSize: 14,
-    color: '#666',
+    color: '#9C8B6B',
     textAlign: 'center',
     fontFamily: 'TextoGeneral',
   },
@@ -570,7 +788,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 10,
     right: 10,
-    backgroundColor: 'rgba(70, 130, 180, 0.9)',
+    backgroundColor: 'rgba(139, 115, 85, 0.9)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
@@ -593,11 +811,11 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderWidth: 2,
     borderColor: '#25D366',
-    elevation: 2,
+    elevation: 3,
     shadowColor: '#25D366',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
   whatsappIconContainer: {
     width: 35,
